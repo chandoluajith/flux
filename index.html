@@ -5,403 +5,624 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FLUX — Instant P2P Transfer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- PeerJS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<!-- QR Code generation -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- QR Code scanning -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
 <style>
+/* =====================================================================
+   DESIGN TOKENS
+   ===================================================================== */
 :root {
-  --bg:       #07090f;
-  --surface:  #0d1117;
-  --glass:    rgba(255,255,255,0.035);
-  --gB:       rgba(255,255,255,0.07);
-  --accent:   #3b82f6;
-  --accentL:  #60a5fa;
-  --accentG:  rgba(59,130,246,0.15);
-  --accentG2: rgba(59,130,246,0.06);
-  --success:  #10b981;
-  --successG: rgba(16,185,129,0.12);
-  --warn:     #f59e0b;
-  --warnG:    rgba(245,158,11,0.1);
-  --danger:   #ef4444;
-  --dangerG:  rgba(239,68,68,0.1);
-  --text:     #f1f5f9;
-  --textM:    #94a3b8;
-  --textD:    #475569;
-  --syne:     'Syne', sans-serif;
-  --mono:     'JetBrains Mono', monospace;
-  --r:        14px;
-  --rS:       8px;
+  --bg:        #06080e;
+  --surface:   #0c0f18;
+  --glass:     rgba(255,255,255,0.032);
+  --gB:        rgba(255,255,255,0.065);
+  --gB2:       rgba(255,255,255,0.035);
+  --accent:    #3b82f6;
+  --accentL:   #60a5fa;
+  --accentG:   rgba(59,130,246,0.14);
+  --accentG2:  rgba(59,130,246,0.055);
+  --success:   #10b981;
+  --successG:  rgba(16,185,129,0.11);
+  --warn:      #f59e0b;
+  --warnG:     rgba(245,158,11,0.1);
+  --danger:    #ef4444;
+  --dangerG:   rgba(239,68,68,0.09);
+  --purple:    #8b5cf6;
+  --purpleG:   rgba(139,92,246,0.1);
+  --text:      #f1f5f9;
+  --textM:     #94a3b8;
+  --textD:     #475569;
+  --textDD:    #2d3748;
+  --syne:      'Syne', sans-serif;
+  --mono:      'JetBrains Mono', monospace;
+  --r:         12px;
+  --rS:        8px;
+  --rXS:       5px;
+  --shadow:    0 8px 32px rgba(0,0,0,0.4);
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden}
-.bg-orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.12;animation:drift 20s ease-in-out infinite}
-.orb1{width:500px;height:500px;background:#3b82f6;top:-200px;left:-100px}
-.orb2{width:400px;height:400px;background:#6366f1;bottom:-150px;right:-100px;animation-delay:-7s}
-.orb3{width:300px;height:300px;background:#0ea5e9;top:40%;left:40%;animation-delay:-14s}
-@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.05)}66%{transform:translate(-20px,15px) scale(.97)}}
-.app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--gB);backdrop-filter:blur(12px);background:rgba(7,9,15,.6);position:sticky;top:0;z-index:100;gap:10px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:10px}
-.brand-icon{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;box-shadow:0 0 20px rgba(59,130,246,.4)}
-.brand-name{font-size:1.25rem;font-weight:800;letter-spacing:.06em;background:linear-gradient(135deg,#f1f5f9 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.nav-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.nav-badge{display:flex;align-items:center;gap:6px;font-size:.62rem;font-family:var(--mono);letter-spacing:.1em;color:var(--textM);background:var(--glass);border:1px solid var(--gB);border-radius:20px;padding:5px 11px}
-.dot-live{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 8px var(--success);animation:blink 2s infinite}
-.dot-warn{width:6px;height:6px;border-radius:50%;background:var(--warn);box-shadow:0 0 8px var(--warn)}
-.dot-err{width:6px;height:6px;border-radius:50%;background:var(--danger);box-shadow:0 0 8px var(--danger)}
-.dot-relay{width:6px;height:6px;border-radius:50%;background:#a855f7;box-shadow:0 0 8px #a855f7;animation:blink 2s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.screen{display:none;flex:1;padding:32px 28px;max-width:940px;margin:0 auto;width:100%}
-.screen.active{display:flex;flex-direction:column}
-#screen-init{align-items:center;justify-content:center;gap:20px}
-.init-spinner{width:48px;height:48px;border:2px solid var(--gB);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.init-text{font-size:.85rem;color:var(--textM);letter-spacing:.1em;font-family:var(--mono);text-align:center}
-.init-sub{font-size:.65rem;color:var(--textD);font-family:var(--mono);text-align:center;max-width:320px;line-height:1.6}
-#screen-pair{gap:22px}
-.pair-hero{text-align:center;margin-bottom:4px}
-.pair-hero h1{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:800;line-height:1.1;background:linear-gradient(135deg,#f1f5f9 0%,#60a5fa 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
-.pair-hero p{color:var(--textM);font-size:.8rem;letter-spacing:.05em;font-family:var(--mono)}
-.pair-grid{display:grid;grid-template-columns:1fr 1px 1fr;background:var(--glass);border:1px solid var(--gB);border-radius:var(--r);overflow:hidden}
-.pair-divider{background:var(--gB);display:flex;align-items:center;justify-content:center;position:relative}
-.pair-divider::after{content:'OR';background:var(--bg);color:var(--textD);font-size:.6rem;font-family:var(--mono);letter-spacing:.15em;padding:8px 6px;border:1px solid var(--gB);border-radius:4px;position:absolute}
-.pair-panel{padding:28px 24px;display:flex;flex-direction:column;gap:14px}
-.panel-label{font-size:.6rem;font-family:var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--textD)}
-.code-display{background:var(--accentG2);border:1px solid rgba(59,130,246,.2);border-radius:var(--rS);padding:20px;text-align:center}
-.code-value{font-family:var(--mono);font-size:2rem;font-weight:700;letter-spacing:.35em;color:var(--accent);text-shadow:0 0 30px rgba(59,130,246,.4);display:block;margin-bottom:6px}
-.code-hint{font-size:.58rem;font-family:var(--mono);color:var(--textD);letter-spacing:.1em}
-.qr-wrap{display:flex;justify-content:center;align-items:center}
-#qrContainer{width:110px;height:110px;background:white;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}
-#qrContainer img,#qrContainer canvas{width:110px!important;height:110px!important}
-.code-actions{display:flex;gap:6px}
-.connect-hint{font-size:.72rem;color:var(--textM);line-height:1.6}
-.input-group{display:flex;flex-direction:column;gap:6px}
-.input-label{font-size:.58rem;font-family:var(--mono);letter-spacing:.15em;color:var(--textD);text-transform:uppercase}
-.code-input{background:rgba(255,255,255,.04);border:1px solid var(--gB);border-radius:var(--rS);padding:12px 14px;font-family:var(--mono);font-size:1.2rem;font-weight:700;letter-spacing:.3em;color:var(--text);text-transform:uppercase;text-align:center;width:100%;transition:border-color .2s,box-shadow .2s;outline:none}
-.code-input::placeholder{color:var(--textD);letter-spacing:.2em}
-.code-input:focus{border-color:rgba(59,130,246,.5);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
-.conn-status-msg{font-size:.64rem;font-family:var(--mono);color:var(--textD);text-align:center;min-height:1.1em;transition:color .2s;line-height:1.5}
-.conn-status-msg.connecting{color:var(--warn)}
-.conn-status-msg.error{color:var(--danger)}
-.conn-status-msg.ok{color:var(--success)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--rS);font-family:var(--syne);font-size:.78rem;font-weight:700;letter-spacing:.04em;cursor:pointer;border:1px solid transparent;transition:all .18s;white-space:nowrap}
-.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 20px rgba(59,130,246,.25)}
-.btn-primary:hover{background:var(--accentL);box-shadow:0 4px 24px rgba(59,130,246,.4);transform:translateY(-1px)}
-.btn-primary:active{transform:translateY(0)}
-.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
-.btn-ghost{background:var(--glass);color:var(--textM);border-color:var(--gB)}
-.btn-ghost:hover{background:rgba(255,255,255,.06);color:var(--text)}
-.btn-ghost:disabled{opacity:.3;cursor:not-allowed}
-.btn-warn{background:var(--warnG);color:var(--warn);border-color:rgba(245,158,11,.25)}
-.btn-warn:hover{background:rgba(245,158,11,.18)}
-.btn-danger{background:var(--dangerG);color:var(--danger);border-color:rgba(239,68,68,.25)}
-.btn-danger:hover{background:rgba(239,68,68,.2)}
-.btn-success{background:var(--successG);color:var(--success);border-color:rgba(16,185,129,.25)}
-.btn-success:hover{background:rgba(16,185,129,.2)}
-.btn-pause{background:rgba(245,158,11,.12);color:var(--warn);border-color:rgba(245,158,11,.3)}
-.btn-pause:hover{background:rgba(245,158,11,.22)}
-.btn-resume{background:rgba(59,130,246,.12);color:var(--accentL);border-color:rgba(59,130,246,.3)}
-.btn-resume:hover{background:rgba(59,130,246,.22)}
-.btn-relay{background:rgba(168,85,247,.12);color:#c084fc;border-color:rgba(168,85,247,.3)}
-.btn-relay:hover{background:rgba(168,85,247,.22)}
-.btn-sm{padding:7px 12px;font-size:.68rem}
-.btn-full{width:100%}
-/* ICE phase tracker strip */
-.ice-phase-strip{font-size:.6rem;font-family:var(--mono);color:var(--textD);background:var(--glass);border:1px solid var(--gB);border-radius:var(--rS);padding:8px 12px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-.ice-phase{display:flex;align-items:center;gap:5px}
-.ice-dot{width:5px;height:5px;border-radius:50%;background:var(--textD);flex-shrink:0;transition:background .3s}
-.ice-dot.active{background:var(--warn);box-shadow:0 0 6px var(--warn)}
-.ice-dot.done{background:var(--success);box-shadow:0 0 6px var(--success)}
-.ice-dot.fail{background:var(--danger)}
-#screen-transfer{gap:14px}
-.conn-bar{display:flex;align-items:center;justify-content:space-between;background:var(--successG);border:1px solid rgba(16,185,129,.2);border-radius:var(--rS);padding:10px 16px;gap:10px;flex-wrap:wrap}
-.conn-bar.relay-mode{background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.2)}
-.conn-info{display:flex;align-items:center;gap:10px}
-.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success);animation:blink 2s infinite}
-.conn-dot.relay{background:#a855f7;box-shadow:0 0 10px #a855f7}
-.conn-label{font-size:.76rem;font-weight:600}
-.conn-peer{font-family:var(--mono);font-size:.7rem;color:var(--success);letter-spacing:.1em}
-.conn-peer.relay{color:#c084fc}
-.conn-type-badge{font-size:.55rem;font-family:var(--mono);padding:2px 8px;border-radius:10px;flex-shrink:0}
-.conn-type-badge.direct{background:var(--successG);color:var(--success);border:1px solid rgba(16,185,129,.2)}
-.conn-type-badge.relay{background:rgba(168,85,247,.12);color:#c084fc;border:1px solid rgba(168,85,247,.2)}
-.conn-type-badge.lan{background:rgba(59,130,246,.12);color:var(--accentL);border:1px solid rgba(59,130,246,.2)}
-.conn-stats{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:.6rem;color:var(--textD)}
-.transfer-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.drop-zone{border:2px dashed var(--gB);border-radius:var(--r);background:var(--glass);min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
-.drop-zone::before{content:'';position:absolute;inset:0;background:var(--accentG);opacity:0;transition:opacity .2s}
-.drop-zone.over{border-color:var(--accent);background:var(--accentG2)}
-.drop-zone.over::before{opacity:1}
-.drop-zone.over .drop-icon{transform:scale(1.15)}
-.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.drop-icon{font-size:2rem;transition:transform .2s;position:relative;z-index:1}
-.drop-main{font-size:.95rem;font-weight:700;position:relative;z-index:1}
-.drop-sub{font-size:.66rem;font-family:var(--mono);color:var(--textD);position:relative;z-index:1}
-.drop-paste{font-size:.58rem;font-family:var(--mono);color:var(--textD);background:var(--glass);border:1px solid var(--gB);border-radius:4px;padding:3px 10px;position:relative;z-index:1}
-.queues{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.queue-label{font-size:.58rem;font-family:var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--textD);margin-bottom:8px;display:flex;align-items:center;gap:8px}
-.queue-label .count{background:var(--glass);border:1px solid var(--gB);border-radius:10px;padding:1px 7px;color:var(--textM)}
-.queue-empty{background:var(--glass);border:1px solid var(--gB);border-radius:var(--rS);padding:20px;text-align:center;font-size:.66rem;font-family:var(--mono);color:var(--textD)}
-.file-items{display:flex;flex-direction:column;gap:6px}
-.file-item{background:var(--glass);border:1px solid var(--gB);border-radius:var(--rS);padding:11px 13px;display:flex;flex-direction:column;gap:8px;animation:itemIn .22s ease;position:relative;overflow:hidden}
-@keyframes itemIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-.file-item.done{border-color:rgba(16,185,129,.2);background:var(--successG)}
-.file-item.cancelled{border-color:rgba(239,68,68,.15);background:var(--dangerG);opacity:.55}
-.file-top{display:flex;align-items:center;gap:9px}
-.file-ext-badge{font-family:var(--mono);font-size:.54rem;font-weight:700;background:var(--accentG);border:1px solid rgba(59,130,246,.2);color:var(--accent);padding:2px 6px;border-radius:4px;flex-shrink:0;text-transform:uppercase}
-.file-ext-badge.recv{background:var(--successG);border-color:rgba(16,185,129,.2);color:var(--success)}
-.file-name-wrap{flex:1;overflow:hidden}
-.file-name{font-size:.74rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.file-meta{font-size:.57rem;font-family:var(--mono);color:var(--textD);margin-top:2px}
-.file-badge{font-size:.57rem;font-family:var(--mono);padding:2px 8px;border-radius:20px;flex-shrink:0}
-.file-badge.sending{background:var(--accentG);color:var(--accentL);border:1px solid rgba(59,130,246,.2)}
-.file-badge.done{background:var(--successG);color:var(--success);border:1px solid rgba(16,185,129,.2)}
-.file-badge.recv{background:var(--warnG);color:var(--warn);border:1px solid rgba(245,158,11,.2)}
-.file-badge.cancelled{background:var(--dangerG);color:var(--danger);border:1px solid rgba(239,68,68,.2)}
-.file-badge.paused{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
-.prog-row{display:flex;align-items:center;gap:8px}
-.prog-track{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
-.prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accentL));border-radius:2px;transition:width .08s linear;box-shadow:0 0 6px rgba(59,130,246,.5)}
-.prog-fill.recv{background:linear-gradient(90deg,var(--success),#34d399);box-shadow:0 0 6px rgba(16,185,129,.4)}
-.prog-pct{font-family:var(--mono);font-size:.57rem;color:var(--textD);min-width:48px;text-align:right}
-.speed-tag{font-family:var(--mono);font-size:.55rem;color:var(--textD);min-width:58px}
-.eta-row{font-family:var(--mono);font-size:.52rem;color:var(--accent);min-height:.75em;padding-left:2px;letter-spacing:.04em}
-.eta-row.recv{color:var(--success)}
-.item-cancel{background:none;border:none;color:var(--textD);cursor:pointer;font-size:.68rem;padding:2px 4px;border-radius:3px;transition:color .15s;flex-shrink:0;line-height:1}
-.item-cancel:hover{color:var(--danger)}
-.toast-wrap{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:9999;pointer-events:none}
-.toast{background:#1a2030;border:1px solid var(--gB);border-radius:var(--rS);padding:10px 14px;font-size:.7rem;font-family:var(--mono);color:var(--textM);box-shadow:0 8px 32px rgba(0,0,0,.4);animation:toastIn .22s ease;max-width:280px;pointer-events:auto;word-break:break-word}
-.toast.err{border-color:rgba(239,68,68,.3);color:var(--danger)}
-.toast.ok{border-color:rgba(16,185,129,.3);color:var(--success)}
-.toast.warn{border-color:rgba(245,158,11,.3);color:var(--warn)}
-.toast.relay{border-color:rgba(168,85,247,.3);color:#c084fc}
-@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateY(6px)}}
-/* Hotspot toggle section */
-.hotspot-section{background:var(--glass);border:1px solid var(--gB);border-radius:var(--r);padding:18px 22px;display:flex;flex-direction:column;gap:10px}
-.hotspot-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.hotspot-title{font-size:.78rem;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
-.hotspot-hint{font-size:.6rem;font-family:var(--mono);color:var(--textD);line-height:1.7}
-.toggle-wrap{display:flex;align-items:center;gap:10px;flex-shrink:0}
-.toggle-label{font-size:.62rem;font-family:var(--mono);color:var(--textM)}
-.toggle-switch{position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0}
-.toggle-switch input{opacity:0;width:0;height:0;position:absolute}
-.toggle-track{position:absolute;inset:0;background:rgba(255,255,255,.08);border:1px solid var(--gB);border-radius:12px;transition:background .2s,border-color .2s}
-.toggle-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;background:var(--textD);border-radius:50%;transition:transform .2s,background .2s;box-shadow:0 1px 4px rgba(0,0,0,.4)}
-.toggle-switch input:checked ~ .toggle-track{background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4)}
-.toggle-switch input:checked ~ .toggle-thumb{transform:translateX(20px);background:var(--warn)}
-.hotspot-status{font-size:.6rem;font-family:var(--mono);padding:6px 12px;border-radius:var(--rS);text-align:center;display:none}
-.hotspot-status.on{display:block;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:var(--warn)}
-.hotspot-status.off{display:block;background:var(--successG);border:1px solid rgba(16,185,129,.2);color:var(--success)}
-/* QR scanner modal */
-.qr-modal-overlay{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;padding:20px}
-.qr-modal-overlay.active{display:flex}
-.qr-modal{background:var(--surface);border:1px solid var(--gB);border-radius:var(--r);padding:24px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:16px;box-shadow:0 24px 64px rgba(0,0,0,.6)}
-.qr-modal-header{display:flex;align-items:center;justify-content:space-between}
-.qr-modal-title{font-size:.9rem;font-weight:700}
-#qr-reader{width:100%;border-radius:var(--rS);overflow:hidden;min-height:250px;background:#000}
-#qr-reader video{width:100%!important;border-radius:var(--rS)}
-#qrScanStatus{font-size:.65rem;font-family:var(--mono);color:var(--textD);text-align:center;min-height:1em}
-footer{text-align:center;padding:20px;font-size:.57rem;font-family:var(--mono);color:var(--textD);letter-spacing:.1em;border-top:1px solid var(--gB);margin-top:auto}
-@media(max-width:640px){
-  nav{padding:12px 14px}
-  .screen{padding:20px 14px}
-  .pair-grid{grid-template-columns:1fr}
-  .pair-divider{height:1px;width:100%}
-  .pair-divider::after{padding:4px 10px}
-  .queues{grid-template-columns:1fr}
-  .conn-stats{display:none}
-  .code-value{font-size:1.6rem;letter-spacing:.25em}
-  .transfer-actions .btn{padding:6px 9px;font-size:.62rem}
-  .ice-phase-strip{display:none}
+
+/* =====================================================================
+   RESET & BASE
+   ===================================================================== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--syne);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* =====================================================================
+   ANIMATED BACKGROUND
+   ===================================================================== */
+.bg-wrap {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0; overflow: hidden;
+}
+.orb {
+  position: absolute; border-radius: 50%;
+  filter: blur(90px); opacity: .1;
+  animation: drift 22s ease-in-out infinite;
+}
+.o1 { width:520px;height:520px;background:#3b82f6;top:-220px;left:-120px; }
+.o2 { width:420px;height:420px;background:#6366f1;bottom:-160px;right:-120px;animation-delay:-8s; }
+.o3 { width:320px;height:320px;background:#0ea5e9;top:42%;left:42%;animation-delay:-15s; }
+@keyframes drift {
+  0%,100% { transform:translate(0,0) scale(1); }
+  33%      { transform:translate(28px,-18px) scale(1.04); }
+  66%      { transform:translate(-18px,14px) scale(.97); }
+}
+
+/* =====================================================================
+   APP SHELL
+   ===================================================================== */
+.app { position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column; }
+
+/* =====================================================================
+   NAV
+   ===================================================================== */
+nav {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 28px;border-bottom:1px solid var(--gB);
+  backdrop-filter:blur(16px);background:rgba(6,8,14,.65);
+  position:sticky;top:0;z-index:200;gap:10px;flex-wrap:wrap;
+}
+.brand { display:flex;align-items:center;gap:10px; }
+.brand-icon {
+  width:32px;height:32px;background:var(--accent);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1rem;box-shadow:0 0 18px rgba(59,130,246,.42);
+}
+.brand-name {
+  font-size:1.22rem;font-weight:800;letter-spacing:.06em;
+  background:linear-gradient(135deg,#f1f5f9 0%,#94a3b8 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.nav-right { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.nav-badge {
+  display:flex;align-items:center;gap:6px;font-size:.6rem;
+  font-family:var(--mono);letter-spacing:.1em;color:var(--textM);
+  background:var(--glass);border:1px solid var(--gB);border-radius:20px;padding:5px 11px;
+}
+.dot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
+.dot-live   { background:var(--success);box-shadow:0 0 8px var(--success);animation:blink 2s infinite; }
+.dot-warn   { background:var(--warn);box-shadow:0 0 8px var(--warn); }
+.dot-err    { background:var(--danger);box-shadow:0 0 8px var(--danger); }
+.dot-purple { background:var(--purple);box-shadow:0 0 8px var(--purple);animation:blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:.3} }
+
+/* =====================================================================
+   SCREENS
+   ===================================================================== */
+.screen { display:none;flex:1;padding:30px 28px;max-width:960px;margin:0 auto;width:100%; }
+.screen.active { display:flex;flex-direction:column; }
+
+/* INIT */
+#screen-init { align-items:center;justify-content:center;gap:20px; }
+.spinner {
+  width:48px;height:48px;border:2px solid var(--gB);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+.init-text { font-size:.82rem;color:var(--textM);letter-spacing:.1em;font-family:var(--mono);text-align:center; }
+
+/* =====================================================================
+   PAIR SCREEN
+   ===================================================================== */
+#screen-pair { gap:22px; }
+
+.pair-hero { text-align:center;margin-bottom:2px; }
+.pair-hero h1 {
+  font-size:clamp(1.8rem,5vw,2.8rem);font-weight:800;line-height:1.1;
+  background:linear-gradient(135deg,#f1f5f9 0%,#60a5fa 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;
+}
+.pair-hero p { color:var(--textM);font-size:.78rem;letter-spacing:.05em;font-family:var(--mono); }
+
+/* Hotspot toggle strip */
+.hotspot-strip {
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--glass);border:1px solid var(--gB);
+  border-radius:var(--rS);padding:12px 18px;gap:14px;flex-wrap:wrap;
+}
+.hotspot-left { display:flex;flex-direction:column;gap:4px; }
+.hotspot-title {
+  font-size:.78rem;font-weight:700;
+  display:flex;align-items:center;gap:8px;
+}
+.hotspot-sub { font-size:.6rem;font-family:var(--mono);color:var(--textD);line-height:1.5; }
+.hotspot-badge {
+  font-size:.56rem;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  background:var(--dangerG);border:1px solid rgba(239,68,68,.2);color:var(--danger);
+  padding:2px 8px;border-radius:20px;
+}
+.hotspot-badge.on {
+  background:var(--purpleG);border-color:rgba(139,92,246,.3);color:var(--purple);
+}
+
+/* Toggle switch */
+.toggle-wrap { display:flex;align-items:center;gap:10px; }
+.toggle-label { font-size:.65rem;font-family:var(--mono);color:var(--textD); }
+.toggle {
+  position:relative;width:46px;height:24px;cursor:pointer;flex-shrink:0;
+}
+.toggle input { opacity:0;width:0;height:0; }
+.toggle-track {
+  position:absolute;inset:0;border-radius:12px;
+  background:#1a1f2e;border:1px solid var(--gB);
+  transition:background .2s,border-color .2s;
+}
+.toggle input:checked ~ .toggle-track {
+  background:rgba(139,92,246,.3);border-color:rgba(139,92,246,.4);
+}
+.toggle-thumb {
+  position:absolute;top:3px;left:3px;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--textD);transition:transform .2s,background .2s;
+  box-shadow:0 1px 4px rgba(0,0,0,.4);
+}
+.toggle input:checked ~ .toggle-track ~ .toggle-thumb,
+.toggle input:checked + .toggle-track + .toggle-thumb {
+  /* fallback — handled via JS class */
+}
+.toggle.on .toggle-thumb {
+  transform:translateX(22px);
+  background:var(--purple);
+  box-shadow:0 0 8px rgba(139,92,246,.5);
+}
+
+/* Pair grid */
+.pair-grid {
+  display:grid;grid-template-columns:1fr 1px 1fr;
+  background:var(--glass);border:1px solid var(--gB);
+  border-radius:var(--r);overflow:hidden;
+}
+.pair-divider {
+  background:var(--gB);display:flex;align-items:center;
+  justify-content:center;position:relative;
+}
+.pair-divider::after {
+  content:'OR';background:var(--bg);color:var(--textD);
+  font-size:.58rem;font-family:var(--mono);letter-spacing:.15em;
+  padding:7px 5px;border:1px solid var(--gB);border-radius:4px;position:absolute;
+}
+.pair-panel { padding:26px 22px;display:flex;flex-direction:column;gap:13px; }
+.panel-label { font-size:.58rem;font-family:var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--textD); }
+
+/* Code card */
+.code-card {
+  background:var(--accentG2);border:1px solid rgba(59,130,246,.18);
+  border-radius:var(--rS);padding:18px;text-align:center;
+}
+.code-value {
+  font-family:var(--mono);font-size:2rem;font-weight:700;
+  letter-spacing:.38em;color:var(--accent);
+  text-shadow:0 0 28px rgba(59,130,246,.38);
+  display:block;margin-bottom:6px;
+}
+.code-hint { font-size:.56rem;font-family:var(--mono);color:var(--textD);letter-spacing:.08em; }
+
+/* QR container */
+.qr-wrap { display:flex;justify-content:center;align-items:center; }
+#qrCodeContainer {
+  background:#fff;padding:8px;border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+#qrCodeContainer img, #qrCodeContainer canvas { display:block; }
+
+/* Scanner panel */
+#qrScannerPanel {
+  display:none;flex-direction:column;gap:10px;
+  border:1px solid var(--gB);border-radius:var(--rS);
+  background:var(--glass);overflow:hidden;padding:14px;
+}
+#qrScannerPanel.open { display:flex; }
+#qrReader { width:100%;border-radius:var(--rXS);overflow:hidden; }
+.scan-hint { font-size:.6rem;font-family:var(--mono);color:var(--textD);text-align:center;line-height:1.5; }
+
+.code-actions { display:flex;gap:6px; }
+
+/* Connect side */
+.connect-hint { font-size:.7rem;color:var(--textM);line-height:1.65; }
+.input-group { display:flex;flex-direction:column;gap:5px; }
+.input-label { font-size:.57rem;font-family:var(--mono);letter-spacing:.15em;color:var(--textD);text-transform:uppercase; }
+.code-input {
+  background:rgba(255,255,255,.038);border:1px solid var(--gB);border-radius:var(--rS);
+  padding:12px 14px;font-family:var(--mono);font-size:1.2rem;font-weight:700;
+  letter-spacing:.3em;color:var(--text);text-transform:uppercase;text-align:center;
+  width:100%;transition:border-color .2s,box-shadow .2s;outline:none;
+}
+.code-input::placeholder { color:var(--textD);letter-spacing:.18em; }
+.code-input:focus { border-color:rgba(59,130,246,.5);box-shadow:0 0 0 3px rgba(59,130,246,.1); }
+
+.conn-msg { font-size:.62rem;font-family:var(--mono);color:var(--textD);text-align:center;min-height:1em;transition:color .2s;line-height:1.5; }
+.conn-msg.connecting { color:var(--warn); }
+.conn-msg.error      { color:var(--danger); }
+.conn-msg.ok         { color:var(--success); }
+
+/* =====================================================================
+   BUTTONS
+   ===================================================================== */
+.btn {
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:10px 16px;border-radius:var(--rS);font-family:var(--syne);
+  font-size:.76rem;font-weight:700;letter-spacing:.04em;cursor:pointer;
+  border:1px solid transparent;transition:all .18s;white-space:nowrap;
+  user-select:none;
+}
+.btn-primary  { background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 18px rgba(59,130,246,.24); }
+.btn-primary:hover  { background:var(--accentL);box-shadow:0 4px 22px rgba(59,130,246,.38);transform:translateY(-1px); }
+.btn-primary:active { transform:translateY(0); }
+.btn-primary:disabled { opacity:.38;cursor:not-allowed;transform:none;box-shadow:none; }
+.btn-ghost   { background:var(--glass);color:var(--textM);border-color:var(--gB); }
+.btn-ghost:hover   { background:rgba(255,255,255,.06);color:var(--text); }
+.btn-ghost:disabled { opacity:.28;cursor:not-allowed; }
+.btn-warn    { background:var(--warnG);color:var(--warn);border-color:rgba(245,158,11,.22); }
+.btn-warn:hover    { background:rgba(245,158,11,.18); }
+.btn-danger  { background:var(--dangerG);color:var(--danger);border-color:rgba(239,68,68,.22); }
+.btn-danger:hover  { background:rgba(239,68,68,.18); }
+.btn-success { background:var(--successG);color:var(--success);border-color:rgba(16,185,129,.22); }
+.btn-success:hover { background:rgba(16,185,129,.18); }
+.btn-purple  { background:var(--purpleG);color:var(--purple);border-color:rgba(139,92,246,.22); }
+.btn-purple:hover  { background:rgba(139,92,246,.2); }
+.btn-sm  { padding:6px 11px;font-size:.66rem; }
+.btn-full { width:100%; }
+
+/* =====================================================================
+   TRANSFER SCREEN
+   ===================================================================== */
+#screen-transfer { gap:13px; }
+
+.conn-bar {
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--successG);border:1px solid rgba(16,185,129,.18);
+  border-radius:var(--rS);padding:9px 15px;gap:10px;flex-wrap:wrap;
+}
+.conn-bar.paused {
+  background:var(--warnG);border-color:rgba(245,158,11,.25);
+}
+.conn-info { display:flex;align-items:center;gap:9px; }
+.conn-dot { width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success);animation:blink 2s infinite;flex-shrink:0; }
+.conn-dot.paused-dot { background:var(--warn);box-shadow:0 0 10px var(--warn); }
+.conn-label { font-size:.74rem;font-weight:600; }
+.conn-peer  { font-family:var(--mono);font-size:.68rem;color:var(--success);letter-spacing:.1em; }
+.conn-peer.paused-peer { color:var(--warn); }
+.conn-stats { display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:.58rem;color:var(--textD); }
+.t-actions  { display:flex;gap:5px;flex-wrap:wrap; }
+
+/* Drop zone */
+.drop-zone {
+  border:2px dashed var(--gB);border-radius:var(--r);background:var(--glass);
+  min-height:160px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:9px;cursor:pointer;transition:all .2s;
+  position:relative;overflow:hidden;
+}
+.drop-zone::before {
+  content:'';position:absolute;inset:0;background:var(--accentG);
+  opacity:0;transition:opacity .2s;
+}
+.drop-zone.over { border-color:var(--accent);background:var(--accentG2); }
+.drop-zone.over::before { opacity:1; }
+.drop-zone.over .di { transform:scale(1.15); }
+.drop-zone input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+.di { font-size:2rem;transition:transform .2s;position:relative;z-index:1; }
+.drop-main { font-size:.92rem;font-weight:700;position:relative;z-index:1; }
+.drop-sub  { font-size:.63rem;font-family:var(--mono);color:var(--textD);position:relative;z-index:1; }
+.drop-paste { font-size:.56rem;font-family:var(--mono);color:var(--textD);background:var(--glass);border:1px solid var(--gB);border-radius:4px;padding:3px 9px;position:relative;z-index:1; }
+
+/* Queues */
+.queues { display:grid;grid-template-columns:1fr 1fr;gap:13px; }
+.q-label { font-size:.57rem;font-family:var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--textD);margin-bottom:7px;display:flex;align-items:center;gap:7px; }
+.q-label .cnt { background:var(--glass);border:1px solid var(--gB);border-radius:10px;padding:1px 7px;color:var(--textM); }
+.q-empty { background:var(--glass);border:1px solid var(--gB);border-radius:var(--rS);padding:18px;text-align:center;font-size:.64rem;font-family:var(--mono);color:var(--textD); }
+.file-items { display:flex;flex-direction:column;gap:6px; }
+
+/* File item */
+.file-item {
+  background:var(--glass);border:1px solid var(--gB);border-radius:var(--rS);
+  padding:11px 12px;display:flex;flex-direction:column;gap:7px;
+  animation:itemIn .22s ease;position:relative;overflow:hidden;
+}
+@keyframes itemIn { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:translateY(0)} }
+.file-item.done       { border-color:rgba(16,185,129,.2);background:var(--successG); }
+.file-item.cancelled  { border-color:rgba(239,68,68,.14);background:var(--dangerG);opacity:.55; }
+.file-item.paused-item{ border-color:rgba(245,158,11,.2);background:var(--warnG); }
+
+.file-top { display:flex;align-items:center;gap:9px; }
+.ext-badge {
+  font-family:var(--mono);font-size:.52rem;font-weight:700;
+  background:var(--accentG);border:1px solid rgba(59,130,246,.18);
+  color:var(--accent);padding:2px 6px;border-radius:4px;flex-shrink:0;text-transform:uppercase;
+}
+.ext-badge.recv { background:var(--successG);border-color:rgba(16,185,129,.18);color:var(--success); }
+.fn-wrap { flex:1;overflow:hidden; }
+.fn { font-size:.73rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.fm { font-size:.56rem;font-family:var(--mono);color:var(--textD);margin-top:2px; }
+
+.f-badge { font-size:.55rem;font-family:var(--mono);padding:2px 7px;border-radius:20px;flex-shrink:0; }
+.f-badge.sending   { background:var(--accentG);color:var(--accentL);border:1px solid rgba(59,130,246,.18); }
+.f-badge.done      { background:var(--successG);color:var(--success);border:1px solid rgba(16,185,129,.18); }
+.f-badge.recv-badge{ background:var(--warnG);color:var(--warn);border:1px solid rgba(245,158,11,.18); }
+.f-badge.cancelled { background:var(--dangerG);color:var(--danger);border:1px solid rgba(239,68,68,.18); }
+.f-badge.paused-b  { background:var(--warnG);color:var(--warn);border:1px solid rgba(245,158,11,.18); }
+
+.prog-row { display:flex;align-items:center;gap:7px; }
+.prog-track { flex:1;height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden; }
+.prog-fill  { height:100%;background:linear-gradient(90deg,var(--accent),var(--accentL));border-radius:2px;transition:width .06s linear;box-shadow:0 0 5px rgba(59,130,246,.45); }
+.prog-fill.recv { background:linear-gradient(90deg,var(--success),#34d399);box-shadow:0 0 5px rgba(16,185,129,.38); }
+.prog-pct   { font-family:var(--mono);font-size:.56rem;color:var(--textD);min-width:40px;text-align:right; }
+.spd-tag    { font-family:var(--mono);font-size:.53rem;color:var(--textD);min-width:56px; }
+
+/* ETA row */
+.eta-row { display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:.53rem;color:var(--textD); }
+.eta-val  { color:var(--textM); }
+.eta-label { color:var(--textDD); }
+
+.i-cancel { background:none;border:none;color:var(--textD);cursor:pointer;font-size:.66rem;padding:2px 3px;border-radius:3px;transition:color .15s;flex-shrink:0;line-height:1; }
+.i-cancel:hover { color:var(--danger); }
+
+/* =====================================================================
+   TOASTS
+   ===================================================================== */
+.toast-wrap { position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:7px;z-index:9999;pointer-events:none; }
+.toast {
+  background:#151b2a;border:1px solid var(--gB);border-radius:var(--rS);
+  padding:9px 13px;font-size:.68rem;font-family:var(--mono);color:var(--textM);
+  box-shadow:var(--shadow);animation:tIn .22s ease;max-width:260px;
+  pointer-events:auto;word-break:break-word;line-height:1.5;
+}
+.toast.err  { border-color:rgba(239,68,68,.28);color:var(--danger); }
+.toast.ok   { border-color:rgba(16,185,129,.28);color:var(--success); }
+.toast.warn { border-color:rgba(245,158,11,.28);color:var(--warn); }
+.toast.info { border-color:rgba(139,92,246,.28);color:var(--purple); }
+@keyframes tIn  { from{opacity:0;transform:translateY(7px)} to{opacity:1;transform:translateY(0)} }
+@keyframes tOut { from{opacity:1} to{opacity:0;transform:translateY(6px)} }
+
+/* =====================================================================
+   FOOTER
+   ===================================================================== */
+footer {
+  text-align:center;padding:18px;font-size:.55rem;font-family:var(--mono);
+  color:var(--textDD);letter-spacing:.1em;border-top:1px solid var(--gB);margin-top:auto;
+}
+
+/* =====================================================================
+   RESPONSIVE
+   ===================================================================== */
+@media(max-width:660px){
+  nav { padding:11px 14px; }
+  .screen { padding:18px 14px; }
+  .pair-grid { grid-template-columns:1fr; }
+  .pair-divider { height:1px;width:100%; }
+  .pair-divider::after { padding:4px 9px; }
+  .queues { grid-template-columns:1fr; }
+  .conn-stats { display:none; }
+  .code-value { font-size:1.6rem;letter-spacing:.25em; }
+  .t-actions .btn { padding:5px 8px;font-size:.6rem; }
+  #screen-transfer { gap:10px; }
 }
 </style>
 </head>
 <body>
-<div class="bg-orbs">
-  <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
+<div class="bg-wrap">
+  <div class="orb o1"></div>
+  <div class="orb o2"></div>
+  <div class="orb o3"></div>
 </div>
+
 <div class="app">
-  <nav>
-    <div class="brand">
-      <div class="brand-icon">⚡</div>
-      <span class="brand-name">FLUX</span>
+<!-- ═══ NAV ═══════════════════════════════════════════════════ -->
+<nav>
+  <div class="brand">
+    <div class="brand-icon">⚡</div>
+    <span class="brand-name">FLUX</span>
+  </div>
+  <div class="nav-right">
+    <div class="nav-badge" id="navBadge">
+      <div class="dot dot-warn" id="navDot"></div>
+      <span id="navStatus">CONNECTING...</span>
     </div>
-    <div class="nav-right">
-      <div class="nav-badge" id="navBadge">
-        <div id="navDot" class="dot-warn"></div>
-        <span id="navStatus">CONNECTING...</span>
-      </div>
-    </div>
-  </nav>
+  </div>
+</nav>
 
-  <!-- INIT SCREEN -->
-  <div class="screen active" id="screen-init">
-    <div class="init-spinner"></div>
-    <div class="init-text" id="initText">Connecting to signaling network...</div>
-    <div class="init-sub" id="initSub">Gathering ICE candidates &amp; negotiating transport...</div>
+<!-- ═══ INIT SCREEN ═══════════════════════════════════════════ -->
+<div class="screen active" id="screen-init">
+  <div class="spinner"></div>
+  <div class="init-text" id="initText">Connecting to relay network...</div>
+</div>
+
+<!-- ═══ PAIR SCREEN ════════════════════════════════════════════ -->
+<div class="screen" id="screen-pair">
+  <div class="pair-hero">
+    <h1>Share files instantly.<br>No account. No limits.</h1>
+    <p>True P2P — files go directly between devices.</p>
   </div>
 
-  <!-- PAIR SCREEN -->
-  <div class="screen" id="screen-pair">
-    <div class="pair-hero">
-      <h1>Share files instantly.<br>No account. No limits.</h1>
-      <p>True P2P — files go directly between devices.</p>
-    </div>
-    <div class="pair-grid">
-      <!-- LEFT: your code + QR -->
-      <div class="pair-panel">
-        <div class="panel-label">↳ Your device code</div>
-        <div class="code-display">
-          <span class="code-value" id="myCodeDisplay">------</span>
-          <div class="code-hint">Share with the other device</div>
-        </div>
-        <div class="qr-wrap"><div id="qrContainer"></div></div>
-        <div class="code-actions">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="copyMyCode()">📋 Copy Code</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="copyLink()">🔗 Share Link</button>
-        </div>
-        <button class="btn btn-warn btn-sm btn-full" onclick="refreshCode()">🔄 Refresh Code</button>
+  <!-- Hotspot Mode toggle -->
+  <div class="hotspot-strip" id="hotspotStrip">
+    <div class="hotspot-left">
+      <div class="hotspot-title">
+        🌐 Strict Offline / Hotspot Mode
+        <span class="hotspot-badge" id="hotspotBadge">OFF</span>
       </div>
-
-      <div class="pair-divider"></div>
-
-      <!-- RIGHT: connect + QR scan -->
-      <div class="pair-panel">
-        <div class="panel-label">↳ Connect to a device</div>
-        <div class="connect-hint">Enter the 6-character code shown on the other device. Works across any OS, browser, and network — including mobile hotspot.</div>
-        <div class="input-group">
-          <label class="input-label">Device Code</label>
-          <input class="code-input" id="connectInput" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false" inputmode="text">
-        </div>
-        <button class="btn btn-ghost btn-sm btn-full" onclick="openQRScanner()">📷 Scan QR Code</button>
-        <button class="btn btn-primary btn-full" id="connectBtn" onclick="connectToPeer()">Connect &nbsp;→</button>
-        <div class="conn-status-msg" id="connStatusMsg"></div>
-        <!-- ICE phase diagnostic strip -->
-        <div class="ice-phase-strip" id="icePhaseStrip" style="display:none">
-          <div class="ice-phase"><div class="ice-dot" id="iceDotHost"></div><span>Host</span></div>
-          <div class="ice-phase"><div class="ice-dot" id="iceDotSrflx"></div><span>STUN</span></div>
-          <div class="ice-phase"><div class="ice-dot" id="iceDotRelay"></div><span>TURN</span></div>
-          <div class="ice-phase"><div class="ice-dot" id="iceDotOpen"></div><span>Open</span></div>
-        </div>
-        <div style="font-size:.57rem;font-family:var(--mono);color:var(--textD);text-align:center;line-height:1.8">
-          Any OS · Any browser · No install required<br>WebRTC · Auto-selects best path (Direct/STUN/TURN)
-        </div>
+      <div class="hotspot-sub">
+        Turn on Mobile Hotspot &amp; connect the other device before enabling.<br>
+        Forces direct LAN routing — disables all STUN/TURN servers.
       </div>
     </div>
-
-    <!-- Offline / Hotspot Mode Toggle -->
-    <div class="hotspot-section">
-      <div class="hotspot-header">
-        <div class="hotspot-title">🌐 Strict Offline / Hotspot Mode</div>
-        <div class="toggle-wrap">
-          <span class="toggle-label" id="hotspotToggleLabel">OFF</span>
-          <label class="toggle-switch" title="Toggle Hotspot / LAN-only mode">
-            <input type="checkbox" id="hotspotToggle" onchange="toggleOfflineMode(this.checked)">
-            <div class="toggle-track"></div>
-            <div class="toggle-thumb"></div>
-          </label>
-        </div>
-      </div>
-      <div class="hotspot-hint">Turn on Mobile Hotspot &amp; connect the other device before enabling. When ON, TURN relay is disabled — connection uses direct LAN path via STUN-reflected candidates. Best for fast local transfers. <strong style="color:var(--warn)">Both devices must be on the same hotspot network.</strong></div>
-      <div class="hotspot-status" id="hotspotStatus"></div>
+    <div class="toggle-wrap">
+      <span class="toggle-label" id="toggleLabel">OFF</span>
+      <label class="toggle" id="hotspotToggle">
+        <input type="checkbox" id="hotspotCb" onchange="onHotspotToggle()">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
     </div>
   </div>
 
-  <!-- TRANSFER SCREEN -->
-  <div class="screen" id="screen-transfer">
-    <div class="conn-bar" id="connBar">
-      <div class="conn-info">
-        <div class="conn-dot" id="connBarDot"></div>
-        <span class="conn-label">Connected to</span>
-        <span class="conn-peer" id="connPeerLabel">——</span>
-        <span class="conn-type-badge direct" id="connTypeBadge">⚡ Direct</span>
+  <div class="pair-grid">
+    <!-- LEFT: your code -->
+    <div class="pair-panel">
+      <div class="panel-label">↳ Your device code</div>
+      <div class="code-card">
+        <span class="code-value" id="myCodeDisplay">------</span>
+        <div class="code-hint">Share with the other device</div>
       </div>
-      <div class="conn-stats">
-        <span id="statSent">↑ 0 files</span>
-        <span id="statRecv">↓ 0 files</span>
-        <span id="statBytes">0 B</span>
+      <!-- QR Code (generated by qrcodejs) -->
+      <div class="qr-wrap">
+        <div id="qrCodeContainer"></div>
       </div>
-      <div class="transfer-actions">
-        <button class="btn btn-pause btn-sm" id="pauseBtn" onclick="togglePause()">⏸️ Pause</button>
-        <button class="btn btn-success btn-sm" onclick="reconnect()" title="Re-attempt connection to last peer">↺ Reconnect</button>
-        <button class="btn btn-danger btn-sm" onclick="cancelAllTransfers()" title="Abort all active transfers">✕ Cancel</button>
-        <button class="btn btn-ghost btn-sm" onclick="disconnect(true)">Disconnect</button>
+      <div class="code-actions">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="copyMyCode()">📋 Copy Code</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="copyLink()">🔗 Share Link</button>
       </div>
+      <button class="btn btn-warn btn-sm btn-full" onclick="refreshCode()">🔄 Refresh Code</button>
     </div>
 
-    <div class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" multiple>
-      <div class="drop-icon">📤</div>
-      <div class="drop-main">Drop files to send</div>
-      <div class="drop-sub">Any type · No size limit · 2 GB+ supported</div>
-      <div class="drop-paste">⌨ Ctrl+V to paste image from clipboard</div>
-    </div>
+    <div class="pair-divider"></div>
 
-    <div class="queues">
-      <div class="queue-section">
-        <div class="queue-label">Sending <span class="count" id="sendCount">0</span></div>
-        <div class="file-items" id="sendList">
-          <div class="queue-empty" id="sendEmpty">Files you send appear here</div>
-        </div>
+    <!-- RIGHT: connect -->
+    <div class="pair-panel">
+      <div class="panel-label">↳ Connect to a device</div>
+      <div class="connect-hint">Enter the 6-character code shown on the other device. Works across any OS, browser, and network.</div>
+
+      <!-- QR Scanner -->
+      <div id="qrScannerPanel">
+        <div id="qrReader"></div>
+        <div class="scan-hint">Point camera at the QR code on the other device.<br>Auto-connects on successful scan.</div>
+        <button class="btn btn-ghost btn-sm btn-full" onclick="stopScanner()">✕ Close Camera</button>
       </div>
-      <div class="queue-section">
-        <div class="queue-label">Received <span class="count" id="recvCount">0</span></div>
-        <div class="file-items" id="recvList">
-          <div class="queue-empty" id="recvEmpty">Incoming files appear here</div>
-        </div>
+
+      <div class="input-group">
+        <label class="input-label">Device Code</label>
+        <input class="code-input" id="connectInput" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false" inputmode="text">
+      </div>
+
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-primary" style="flex:1" id="connectBtn" onclick="connectToPeer()">Connect →</button>
+        <button class="btn btn-purple btn-sm" id="scanBtn" onclick="toggleScanner()" title="Scan QR code">📷 Scan QR</button>
+      </div>
+
+      <div class="conn-msg" id="connMsg"></div>
+
+      <div style="font-size:.55rem;font-family:var(--mono);color:var(--textD);text-align:center;line-height:1.8;">
+        Any OS · Any browser · No install<br>WebRTC + STUN/TURN · End-to-end encrypted
       </div>
     </div>
   </div>
+</div><!-- /screen-pair -->
+
+<!-- ═══ TRANSFER SCREEN ════════════════════════════════════════ -->
+<div class="screen" id="screen-transfer">
+
+  <div class="conn-bar" id="connBar">
+    <div class="conn-info">
+      <div class="conn-dot" id="cDot"></div>
+      <span class="conn-label">Connected to</span>
+      <span class="conn-peer" id="connPeer">——</span>
+    </div>
+    <div class="conn-stats">
+      <span id="statSent">↑ 0 files</span>
+      <span id="statRecv">↓ 0 files</span>
+      <span id="statBytes">0 B</span>
+    </div>
+    <div class="t-actions">
+      <!-- REQ: Pause / Resume -->
+      <button class="btn btn-warn btn-sm" id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
+      <!-- REQ: Reconnect -->
+      <button class="btn btn-success btn-sm" onclick="reconnect()" title="Reconnect to last peer">↺ Reconnect</button>
+      <!-- REQ: Cancel All -->
+      <button class="btn btn-danger btn-sm" onclick="cancelAllTransfers()">✕ Cancel</button>
+      <button class="btn btn-ghost btn-sm" onclick="disconnect(true)">Disconnect</button>
+    </div>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" multiple>
+    <div class="di">📤</div>
+    <div class="drop-main">Drop files to send</div>
+    <div class="drop-sub">Any type · No size limit · 2 GB+ supported</div>
+    <div class="drop-paste">⌨ Ctrl+V to paste image from clipboard</div>
+  </div>
+
+  <div class="queues">
+    <div>
+      <div class="q-label">Sending <span class="cnt" id="sendCount">0</span></div>
+      <div class="file-items" id="sendList">
+        <div class="q-empty" id="sendEmpty">Files you send appear here</div>
+      </div>
+    </div>
+    <div>
+      <div class="q-label">Received <span class="cnt" id="recvCount">0</span></div>
+      <div class="file-items" id="recvList">
+        <div class="q-empty" id="recvEmpty">Incoming files appear here</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /screen-transfer -->
 </div><!-- /app -->
 
-<!-- QR Scanner Modal -->
-<div class="qr-modal-overlay" id="qrScanModal">
-  <div class="qr-modal">
-    <div class="qr-modal-header">
-      <span class="qr-modal-title">📷 Scan Sender's QR Code</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeQRScanner()">✕ Close</button>
-    </div>
-    <div id="qr-reader"></div>
-    <div id="qrScanStatus">Point the rear camera at the sender's QR code</div>
-  </div>
-</div>
-
 <div class="toast-wrap" id="toastWrap"></div>
-<footer>FLUX v3 — WebRTC · Auto Direct/STUN/TURN · Zero storage · Zero logs</footer>
+<footer>FLUX — Direct device-to-device · WebRTC DataChannels · Zero storage · Zero logs</footer>
 
+<!-- ═══════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════════════════ -->
 <script>
-// ═══════════════════════════════════════════════════════════════════════
-//  PLATFORM DETECTION
-// ═══════════════════════════════════════════════════════════════════════
+'use strict';
+/* ─────────────────────────────────────────────────────────────────────
+   CONSTANTS — LAN-FIRST ARCHITECTURE
+   ─────────────────────────────────────────────────────────────────── */
 const IS_MOBILE = /Mobi|Android|iPhone|iPad|webOS/i.test(navigator.userAgent);
 
-const CHUNK_SIZE      = IS_MOBILE ? 32 * 1024   : 128 * 1024;
-const BUF_HIGH        = IS_MOBILE ? 512 * 1024  : 2 * 1024 * 1024;
-const BUF_LOW         = IS_MOBILE ? 64 * 1024   : 256 * 1024;
-const UI_UPDATE_EVERY = IS_MOBILE ? 2 : 8;
+// LAN FIX: Large chunks for maximum throughput on fast local networks.
+// Desktop: 256 KB (optimal for Gigabit LAN). Mobile: 64 KB.
+const CHUNK_SIZE     = IS_MOBILE ? 64  * 1024 : 256 * 1024;
 
-// ── INCREASED TO 20s ─────────────────────────────────────────────────
-const HANDSHAKE_MS    = 20_000;
+// LAN FIX: High-water mark ONLY triggers a pause — no artificial delay otherwise.
+// Desktop browsers support up to 256 MB buffered; we stay well under.
+const BUF_HIGH       = IS_MOBILE ?  4 * 1024 * 1024 : 16 * 1024 * 1024;  // 4 MB / 16 MB
+const BUF_LOW        = IS_MOBILE ?  512 * 1024       :  4 * 1024 * 1024;  // 512 KB / 4 MB
 
+// REQ 2: Strict handshake deadline
+const HANDSHAKE_MS   = 7000;
+
+// Peer ID character set (no ambiguous chars)
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-// ═══════════════════════════════════════════════════════════════════════
-//  ICE SERVER ARRAYS
-//
-//  NORMAL MODE: Full STUN+TURN stack.
-//    STUN  → for direct/srflx path (fast, low-latency)
-//    TURN  → relay fallback for AP isolation, symmetric NATs, strict firewalls
-//    TCP443 TURN → bypasses Windows Firewall UDP blocking & corporate proxies
-//
-//  HOTSPOT MODE: STUN only (no TURN).
-//    STUN gives srflx candidates → allows NAT hairpin path on hotspot.
-//    No relay needed: both devices share the same phone's NAT.
-//    Removing TURN forces local path, avoids cloud relay latency on LAN.
-// ═══════════════════════════════════════════════════════════════════════
-const STUN_SERVERS = [
+// Full STUN / TURN server list for Internet mode
+const ICE_SERVERS_FULL = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
@@ -412,13 +633,7 @@ const STUN_SERVERS = [
   { urls: 'stun:stun.stunprotocol.org:3478' },
   { urls: 'stun:stun.nextcloud.com:443' },
   { urls: 'stun:stun.voip.blackberry.com:3478' },
-];
-
-// Multi-provider TURN for maximum reliability.
-// TCP 443 entries are critical: bypass Windows Defender UDP blocks,
-// AP isolation fallback path, and corporate firewalls that only allow HTTPS.
-const TURN_SERVERS = [
-  // Primary: openrelay (UDP + TCP + TLS)
+  // Free TURN — mobile NAT traversal
   { urls: 'turn:openrelay.metered.ca:80',
     username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443',
@@ -427,64 +642,39 @@ const TURN_SERVERS = [
     username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:80?transport=tcp',
     username: 'openrelayproject', credential: 'openrelayproject' },
-  // Secondary: Twilio NTS free (high-availability)
-  { urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-    username: 'f4b4035eaa76f4a55de5f4351567653ee4ff7a05ea6a5b7d0c3e9d71c5e4b4b5',
-    credential: 'Qe0dAnkZoxE3p4V9BKGNxGx3K+rJA/bAw7JGxIqT6+0=' },
-  { urls: 'turn:global.turn.twilio.com:443?transport=tcp',
-    username: 'f4b4035eaa76f4a55de5f4351567653ee4ff7a05ea6a5b7d0c3e9d71c5e4b4b5',
-    credential: 'Qe0dAnkZoxE3p4V9BKGNxGx3K+rJA/bAw7JGxIqT6+0=' },
-  // Tertiary: numb.viagenie free TURN
-  { urls: 'turn:numb.viagenie.ca',
-    username: 'webrtc@live.com', credential: 'muazkh' },
-  // Metered.ca additional (different anycast region)
-  { urls: 'turns:openrelay.metered.ca:443',
-    username: 'openrelayproject', credential: 'openrelayproject' },
 ];
 
-const ICE_SERVERS = [...STUN_SERVERS, ...TURN_SERVERS];
+/* ─────────────────────────────────────────────────────────────────────
+   GLOBAL STATE
+   ─────────────────────────────────────────────────────────────────── */
+let peer             = null;
+let conn             = null;
+let myCode           = '';
+let lastPeerCode     = '';
+let connState        = 'idle'; // idle | connecting | open | disconnected
+let handshakeTimer   = null;
+let hotspotMode      = false;  // REQ: offline/hotspot toggle
 
-// Hotspot: STUN only — srflx gives NAT hairpin path, no cloud relay
-const ICE_SERVERS_HOTSPOT = [...STUN_SERVERS];
-
-// ═══════════════════════════════════════════════════════════════════════
-//  STATE
-// ═══════════════════════════════════════════════════════════════════════
-let peer          = null;
-let conn          = null;
-let myCode        = '';
-let lastPeerCode  = '';
-
-let connState      = 'idle';
-let handshakeTimer = null;
-
+// Send stats
 let sendCount = 0, recvCount = 0;
 let totalBytesSent = 0, totalBytesRecv = 0;
 
+// Active send jobs: id → { cancelled:bool }
 const activeJobs = new Map();
+// Incoming file buffers
 const inFlight   = new Map();
 
-// Pause/Resume
-let isPaused     = false;
-let pauseResolve = null;
+// REQ: Pause / Resume system
+let isPaused         = false;
+let pauseResolvers   = [];   // array of resolve functions waiting for resume
 
-// QR scanner
-let html5QrCode  = null;
-let qrInstance   = null;
+// QR scanner instance
+let html5QrScanner   = null;
+let scannerOpen      = false;
 
-// Offline mode
-let offlineMode  = false;
-
-// Connection type detected from ICE candidates
-let connPathType = 'direct'; // 'direct' | 'srflx' | 'relay' | 'lan'
-
-// ICE restart attempt counter
-let iceRestartAttempts = 0;
-const MAX_ICE_RESTARTS = 2;
-
-// ═══════════════════════════════════════════════════════════════════════
-//  UTILITIES
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   UTILITY FUNCTIONS
+   ─────────────────────────────────────────────────────────────────── */
 function genCode() {
   let c = '';
   for (let i = 0; i < 6; i++) c += CHARS[Math.floor(Math.random() * CHARS.length)];
@@ -492,8 +682,8 @@ function genCode() {
 }
 
 function fmtSize(b) {
-  if (b < 1024)           return b + ' B';
-  if (b < 1_048_576)     return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1024)         return b + ' B';
+  if (b < 1_048_576)   return (b / 1024).toFixed(1) + ' KB';
   if (b < 1_073_741_824) return (b / 1_048_576).toFixed(1) + ' MB';
   return (b / 1_073_741_824).toFixed(2) + ' GB';
 }
@@ -504,12 +694,13 @@ function fmtSpeed(bps) {
   return (bps / 1_048_576).toFixed(1) + ' MB/s';
 }
 
-function fmtETA(seconds) {
-  if (!isFinite(seconds) || seconds <= 0) return '';
-  if (seconds < 60)  return 'ETA: ' + Math.ceil(seconds) + 's';
-  const m = Math.floor(seconds / 60);
-  const s = Math.ceil(seconds % 60);
-  return 'ETA: ' + m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+// REQ: ETA — returns human-readable string
+function fmtETA(remainingBytes, bps) {
+  if (!bps || bps < 1 || !isFinite(bps)) return '--';
+  const secs = Math.ceil(remainingBytes / bps);
+  if (secs < 60)  return secs + 's';
+  if (secs < 3600) return Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+  return Math.floor(secs/3600) + 'h ' + Math.floor((secs%3600)/60) + 'm';
 }
 
 function getExt(name) {
@@ -530,13 +721,14 @@ function showScreen(id) {
 
 function setNavStatus(text, dotCls) {
   document.getElementById('navStatus').textContent = text;
-  document.getElementById('navDot').className = dotCls;
+  const d = document.getElementById('navDot');
+  d.className = 'dot ' + dotCls;
 }
 
 function setConnMsg(msg, cls) {
-  const el = document.getElementById('connStatusMsg');
+  const el = document.getElementById('connMsg');
   el.textContent = msg;
-  el.className = 'conn-status-msg ' + (cls || '');
+  el.className = 'conn-msg ' + (cls || '');
 }
 
 function toast(msg, type, ms) {
@@ -547,277 +739,173 @@ function toast(msg, type, ms) {
   el.textContent = msg;
   w.appendChild(el);
   setTimeout(() => {
-    el.style.animation = 'toastOut .22s ease forwards';
+    el.style.animation = 'tOut .22s ease forwards';
     setTimeout(() => el.remove(), 230);
   }, ms);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  ICE PHASE STRIP — visual diagnostic during connection
-// ═══════════════════════════════════════════════════════════════════════
-function setIceDot(id, state) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.className = 'ice-dot ' + (state || '');
-}
-
-function showIceStrip(show) {
-  const el = document.getElementById('icePhaseStrip');
-  if (el) el.style.display = show ? 'flex' : 'none';
-}
-
-function resetIceDots() {
-  ['iceDotHost','iceDotSrflx','iceDotRelay','iceDotOpen'].forEach(id => setIceDot(id, ''));
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  CONNECTION TYPE DETECTOR
-//  Inspects selected ICE candidate pair to determine actual path type.
-//  Used to update the conn-type badge in the transfer bar.
-// ═══════════════════════════════════════════════════════════════════════
-async function detectConnPath(dataChannel) {
-  try {
-    if (!dataChannel || !dataChannel._peerConnection) return;
-    const pc = dataChannel._peerConnection;
-    const stats = await pc.getStats();
-    stats.forEach(report => {
-      if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
-        const localCand = stats.get(report.localCandidateId);
-        if (localCand) {
-          if (localCand.candidateType === 'relay') {
-            connPathType = 'relay';
-            setIceDot('iceDotRelay', 'done');
-          } else if (localCand.candidateType === 'srflx') {
-            connPathType = 'srflx';
-            setIceDot('iceDotSrflx', 'done');
-          } else if (localCand.candidateType === 'host') {
-            connPathType = 'lan';
-            setIceDot('iceDotHost', 'done');
-          }
-        }
-        updateConnBar();
-      }
-    });
-  } catch(e) {}
-}
-
-function updateConnBar() {
-  const bar   = document.getElementById('connBar');
-  const dot   = document.getElementById('connBarDot');
-  const peer  = document.getElementById('connPeerLabel');
-  const badge = document.getElementById('connTypeBadge');
-  if (!bar || !dot || !peer || !badge) return;
-
-  if (connPathType === 'relay') {
-    bar.classList.add('relay-mode');
-    dot.className = 'conn-dot relay';
-    peer.className = 'conn-peer relay';
-    badge.className = 'conn-type-badge relay';
-    badge.textContent = '☁ TURN Relay';
-    toast('☁ Using TURN relay — AP isolation detected', 'relay', 5000);
-  } else if (connPathType === 'srflx') {
-    bar.classList.remove('relay-mode');
-    dot.className = 'conn-dot';
-    peer.className = 'conn-peer';
-    badge.className = 'conn-type-badge direct';
-    badge.textContent = '⚡ STUN Direct';
-  } else if (connPathType === 'lan') {
-    bar.classList.remove('relay-mode');
-    dot.className = 'conn-dot';
-    peer.className = 'conn-peer';
-    badge.className = 'conn-type-badge lan';
-    badge.textContent = '🏠 LAN Direct';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  QR CODE GENERATION (real, scannable via QRCode.js CDN)
-// ═══════════════════════════════════════════════════════════════════════
-function drawQR(text) {
-  const container = document.getElementById('qrContainer');
+/* ─────────────────────────────────────────────────────────────────────
+   QR CODE GENERATION (qrcodejs)
+   ─────────────────────────────────────────────────────────────────── */
+function renderQR(text) {
+  const container = document.getElementById('qrCodeContainer');
   container.innerHTML = '';
-  if (typeof QRCode !== 'undefined') {
-    qrInstance = new QRCode(container, {
+  try {
+    new QRCode(container, {
       text: text,
-      width: 110,
-      height: 110,
+      width: 100,
+      height: 100,
       colorDark: '#000000',
       colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
+      correctLevel: QRCode.CorrectLevel.M,
     });
+  } catch(e) {
+    // Fallback: just show the text
+    container.textContent = text;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   QR CODE SCANNER (html5-qrcode)
+   ─────────────────────────────────────────────────────────────────── */
+function toggleScanner() {
+  if (scannerOpen) {
+    stopScanner();
   } else {
-    // Minimal fallback if CDN fails
-    const cv = document.createElement('canvas');
-    cv.width = 110; cv.height = 110;
-    const ctx = cv.getContext('2d');
-    const S = 110, N = 25, cs = S / N;
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, S, S); ctx.fillStyle = '#000';
-    let seed = 0;
-    for (let i = 0; i < text.length; i++) seed = (seed * 31 + text.charCodeAt(i)) >>> 0;
-    const bit = (x, y) => ((seed*(x*37+7)*(y*53+11)*2654435769)>>>0)%5<2;
-    const finder = (ox, oy) => {
-      for (let y=0;y<7;y++) for (let x=0;x<7;x++)
-        if(x===0||x===6||y===0||y===6||(x>=2&&x<=4&&y>=2&&y<=4))
-          ctx.fillRect((ox+x)*cs,(oy+y)*cs,cs,cs);
-    };
-    for (let y=0;y<N;y++) for (let x=0;x<N;x++)
-      if(!((x<8&&y<8)||(x>=N-8&&y<8)||(x<8&&y>=N-8))&&bit(x,y))
-        ctx.fillRect(x*cs,y*cs,cs,cs);
-    finder(0,0); finder(N-7,0); finder(0,N-7);
-    container.appendChild(cv);
+    startScanner();
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  QR SCANNER (html5-qrcode, rear camera, auto-fills & connects)
-// ═══════════════════════════════════════════════════════════════════════
-function openQRScanner() {
-  const modal = document.getElementById('qrScanModal');
-  modal.classList.add('active');
-  document.getElementById('qrScanStatus').textContent = 'Starting camera...';
+function startScanner() {
+  const panel = document.getElementById('qrScannerPanel');
+  panel.classList.add('open');
+  document.getElementById('scanBtn').textContent = '✕ Stop Scan';
+  scannerOpen = true;
 
-  if (typeof Html5Qrcode === 'undefined') {
-    document.getElementById('qrScanStatus').textContent = 'QR library not loaded. Check internet connection.';
-    return;
+  try {
+    html5QrScanner = new Html5Qrcode('qrReader');
+    html5QrScanner.start(
+      { facingMode: 'environment' }, // rear camera
+      { fps: 10, qrbox: { width: 200, height: 200 } },
+      (decodedText) => {
+        // Extract peer code from either a full URL or raw code
+        let code = decodedText.trim().toUpperCase();
+        const urlParam = decodedText.match(/[?&]peer=([A-Z0-9]{6})/i);
+        if (urlParam) code = urlParam[1].toUpperCase();
+        else if (code.length > 6) code = code.slice(-6); // take last 6
+
+        code = code.replace(/[^A-Z0-9]/g, '').slice(0, 6);
+        if (code.length === 6) {
+          stopScanner();
+          document.getElementById('connectInput').value = code;
+          setConnMsg('QR scanned: ' + code + ' — connecting...', 'connecting');
+          setTimeout(connectToPeer, 300);
+        }
+      },
+      () => {} // silent scan errors
+    ).catch(err => {
+      toast('Camera access denied: ' + (err.message || err), 'err', 5000);
+      stopScanner();
+    });
+  } catch(e) {
+    toast('QR scanner unavailable: ' + (e.message || e), 'err');
+    stopScanner();
   }
-
-  html5QrCode = new Html5Qrcode('qr-reader');
-  html5QrCode.start(
-    { facingMode: 'environment' },
-    { fps: 10, qrbox: { width: 220, height: 220 } },
-    (decodedText) => {
-      let peerCode = decodedText.trim();
-      try {
-        const url = new URL(decodedText);
-        const p = url.searchParams.get('peer');
-        if (p) peerCode = p;
-      } catch (e) {}
-      peerCode = peerCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-      if (peerCode.length >= 3) {
-        closeQRScanner();
-        document.getElementById('connectInput').value = peerCode;
-        toast('📷 QR Scanned: ' + peerCode, 'ok');
-        setTimeout(connectToPeer, 350);
-      } else {
-        document.getElementById('qrScanStatus').textContent = 'Invalid QR — try again';
-      }
-    },
-    () => {}
-  ).then(() => {
-    document.getElementById('qrScanStatus').textContent = 'Point the rear camera at the sender\'s QR code';
-  }).catch(err => {
-    document.getElementById('qrScanStatus').textContent = 'Camera error: ' + (err.message || err);
-  });
 }
 
-function closeQRScanner() {
-  document.getElementById('qrScanModal').classList.remove('active');
-  if (html5QrCode) {
-    html5QrCode.stop().catch(() => {});
-    html5QrCode.clear();
-    html5QrCode = null;
+function stopScanner() {
+  const panel = document.getElementById('qrScannerPanel');
+  panel.classList.remove('open');
+  document.getElementById('scanBtn').textContent = '📷 Scan QR';
+  scannerOpen = false;
+
+  if (html5QrScanner) {
+    html5QrScanner.stop().catch(() => {});
+    html5QrScanner = null;
   }
-  document.getElementById('qr-reader').innerHTML = '';
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  FEAT 6: OFFLINE / HOTSPOT MODE TOGGLE
-//
-//  FIX from v2: We now use STUN (not empty iceServers) in hotspot mode.
-//
-//  WHY THIS FIXES THE TIMEOUT:
-//  ─────────────────────────────────────────────────────────────────────
-//  v2 used { iceServers:[], iceTransportPolicy:'host' }
-//  Chrome/Firefox mDNS-obfuscate host candidates (.local addresses).
-//  mDNS resolution requires multicast UDP. On some hotspots (especially
-//  Windows Mobile Hotspot and restrictive Android configs), multicast is
-//  silently dropped → both devices see each other's mDNS candidates but
-//  can't resolve them → ICE stalls → timeout.
-//
-//  v3 fix: Use STUN servers in hotspot mode. STUN generates srflx
-//  candidates (the phone's real hotspot NAT IP). When both devices are
-//  on the same mobile hotspot, the NAT is the phone itself. Traffic
-//  either routes directly (host candidate via LAN) OR through the
-//  phone's NAT hairpin (srflx path). BOTH succeed on a hotspot.
-//  We still exclude TURN to keep traffic local (no cloud relay).
-// ═══════════════════════════════════════════════════════════════════════
-function toggleOfflineMode(enabled) {
+/* ─────────────────────────────────────────────────────────────────────
+   OFFLINE / HOTSPOT MODE TOGGLE
+   ─────────────────────────────────────────────────────────────────── */
+function onHotspotToggle() {
+  const cb = document.getElementById('hotspotCb');
+  hotspotMode = cb.checked;
+  const badge  = document.getElementById('hotspotBadge');
+  const label  = document.getElementById('toggleLabel');
+  const toggle = document.getElementById('hotspotToggle');
+
+  if (hotspotMode) {
+    badge.textContent = 'ON — LAN ONLY';
+    badge.className   = 'hotspot-badge on';
+    label.textContent = 'ON';
+    toggle.classList.add('on');
+    toast('🌐 Hotspot Mode ON — STUN/TURN disabled. LAN direct only.', 'info', 5000);
+  } else {
+    badge.textContent = 'OFF';
+    badge.className   = 'hotspot-badge';
+    label.textContent = 'OFF';
+    toggle.classList.remove('on');
+    toast('🌐 Hotspot Mode OFF — Internet routing restored.', 'warn', 4000);
+  }
+
+  // Rebuild peer with new ICE config
   if (connState === 'open') {
-    if (!confirm('Switching mode will disconnect the current session. Continue?')) {
-      document.getElementById('hotspotToggle').checked = !enabled;
+    if (!confirm('Changing hotspot mode will disconnect the current session. Continue?')) {
+      cb.checked  = !hotspotMode;
+      hotspotMode = !hotspotMode;
       return;
     }
     disconnect(false);
   }
-
-  offlineMode = enabled;
-  const label  = document.getElementById('hotspotToggleLabel');
-  const status = document.getElementById('hotspotStatus');
-  label.textContent = enabled ? 'ON' : 'OFF';
-
-  if (enabled) {
-    status.textContent = '📵 Hotspot LAN mode — TURN cloud relay disabled. STUN active for direct path.';
-    status.className = 'hotspot-status on';
-    toast('📵 Hotspot Mode ON — Direct LAN path via STUN', 'warn', 4000);
-  } else {
-    status.textContent = '🌐 Full mode restored — STUN + TURN relay active.';
-    status.className = 'hotspot-status off';
-    toast('🌐 Full Mode — STUN + TURN relay active', 'ok');
-  }
-
-  const currentCode = myCode || genCode();
   cancelAllTransfers();
   resetQueues();
-  initPeer(currentCode);
+  initPeer(myCode || genCode());
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  PEER INIT
-//  Builds ICE config based on offlineMode flag.
-//  Both modes use iceTransportPolicy:'all' for broadest compatibility.
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   PEER INITIALISATION
+   ─────────────────────────────────────────────────────────────────── */
+function buildPeerConfig() {
+  if (hotspotMode) {
+    // REQ: Hotspot mode — host candidates ONLY, no internet servers
+    return {
+      iceServers: [],
+      iceTransportPolicy: 'host',
+    };
+  }
+  return {
+    iceServers: ICE_SERVERS_FULL,
+    // LAN FIX: 'all' lets WebRTC prioritise host (LAN) candidates first.
+    // NEVER use 'relay' — that forces all traffic through TURN servers.
+    iceTransportPolicy: 'all',
+    iceCandidatePoolSize: IS_MOBILE ? 4 : 10,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
+  };
+}
+
 function initPeer(code) {
   showScreen('screen-init');
-  document.getElementById('initText').textContent = offlineMode
-    ? 'Initializing in Hotspot/LAN mode (STUN only)...'
-    : 'Connecting to relay network...';
-  document.getElementById('initSub').textContent = offlineMode
-    ? 'Gathering host + LAN candidates — no cloud relay'
-    : 'Gathering ICE candidates across STUN and TURN servers...';
+  document.getElementById('initText').textContent =
+    hotspotMode ? 'Starting in Hotspot / LAN mode...' : 'Connecting to relay network...';
   setNavStatus('CONNECTING...', 'dot-warn');
 
-  if (peer && !peer.destroyed) { try { peer.destroy(); } catch (e) {} }
-
-  // ── ICE CONFIG ──────────────────────────────────────────────────────
-  //  Normal:  STUN + TURN | iceTransportPolicy:'all'
-  //  Hotspot: STUN only   | iceTransportPolicy:'all'
-  //           (host candidates + srflx for NAT hairpin; no TURN relay)
-  const iceConfig = offlineMode
-    ? {
-        iceServers: ICE_SERVERS_HOTSPOT,  // STUN only — no TURN
-        iceTransportPolicy: 'all',         // 'host' policy removed (mDNS bug fix)
-        iceCandidatePoolSize: IS_MOBILE ? 2 : 4,
-        bundlePolicy: 'max-bundle',
-        rtcpMuxPolicy: 'require',
-      }
-    : {
-        iceServers: ICE_SERVERS,           // STUN + TURN
-        iceTransportPolicy: 'all',
-        iceCandidatePoolSize: IS_MOBILE ? 4 : 10,
-        bundlePolicy: 'max-bundle',
-        rtcpMuxPolicy: 'require',
-      };
+  if (peer && !peer.destroyed) { try { peer.destroy(); } catch(e) {} }
 
   peer = new Peer(code, {
     debug: 0,
-    config: iceConfig
+    config: buildPeerConfig(),
   });
 
   peer.on('open', id => {
     myCode = id;
     document.getElementById('myCodeDisplay').textContent = id;
-    setNavStatus('ONLINE · ' + id, 'dot-live');
-    drawQR(location.href.split('?')[0] + '?peer=' + id);
+    setNavStatus((hotspotMode ? 'LAN · ' : 'ONLINE · ') + id,
+                 hotspotMode ? 'dot-purple' : 'dot-live');
+
+    // Generate proper QR code
+    renderQR(location.href.split('?')[0] + '?peer=' + id);
 
     const autoCode = new URLSearchParams(location.search).get('peer');
     if (autoCode && autoCode.toUpperCase() !== myCode) {
@@ -832,11 +920,11 @@ function initPeer(code) {
 
   peer.on('connection', incoming => {
     if (connState === 'open') {
-      toast('⚠ Connection rejected — already in a session', 'warn');
-      try { incoming.close(); } catch (e) {}
+      toast('⚠ Rejected extra connection — already in session', 'warn');
+      try { incoming.close(); } catch(e) {}
       return;
     }
-    toast('↓ Incoming from ' + incoming.peer);
+    toast('↓ Incoming connection from ' + incoming.peer);
     setupConn(incoming);
   });
 
@@ -849,25 +937,24 @@ function initPeer(code) {
     if (err.type === 'peer-unavailable') {
       clearHSTimer();
       setConnState('idle');
-      showIceStrip(false);
       setConnMsg('Device not found. Check the code and try again.', 'error');
       resetConnBtn();
       toast('Device not found: ' + err.message, 'err', 5000);
       return;
     }
-    console.error('Peer error:', err.type, err.message);
-    toast('Error: ' + err.type, 'err');
+    console.error('PeerJS:', err.type, err.message);
+    toast('Network error: ' + err.type, 'err');
   });
 
   peer.on('disconnected', () => {
     setNavStatus('RECONNECTING...', 'dot-warn');
-    try { peer.reconnect(); } catch (e) {}
+    try { peer.reconnect(); } catch(e) {}
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  STATE MACHINE + HANDSHAKE TIMER (now 20s)
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   CONNECTION STATE MACHINE
+   ─────────────────────────────────────────────────────────────────── */
 function setConnState(s) { connState = s; }
 
 function startHSTimer() {
@@ -875,17 +962,10 @@ function startHSTimer() {
   handshakeTimer = setTimeout(() => {
     if (connState !== 'open') {
       setConnState('idle');
-      if (conn) { try { conn.close(); } catch (e) {} conn = null; }
-      showIceStrip(false);
-
-      // Context-sensitive timeout error message
-      const msg = offlineMode
-        ? '⏱ Timed out (20s). In Hotspot Mode: ensure BOTH devices are on the same hotspot and not on separate Wi-Fi networks.'
-        : '⏱ Timed out (20s). On AP-isolated Wi-Fi the TURN relay may be blocked. Try a mobile hotspot or enable Hotspot Mode.';
-
-      setConnMsg(msg, 'error');
+      if (conn) { try { conn.close(); } catch(e) {} conn = null; }
+      setConnMsg(`⏱ Handshake timed out (${HANDSHAKE_MS/1000}s). Check firewall or enable Hotspot Mode.`, 'error');
       resetConnBtn();
-      toast('Connection timed out — ' + (offlineMode ? 'check hotspot network' : 'TURN relay may be blocked by AP isolation'), 'err', 7000);
+      toast('Connection timed out. Try Hotspot Mode for LAN transfers.', 'err', 7000);
     }
   }, HANDSHAKE_MS);
 }
@@ -900,47 +980,33 @@ function resetConnBtn() {
   btn.textContent = 'Connect →';
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  CONNECT
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   CONNECT
+   ─────────────────────────────────────────────────────────────────── */
 function connectToPeer() {
-  const raw = document.getElementById('connectInput').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
-  if (!raw || raw.length < 3)  { toast('Enter a valid device code', 'err'); return; }
-  if (raw === myCode)           { toast('Cannot connect to yourself', 'err'); return; }
-  if (connState === 'connecting') { toast('Already attempting connection...', 'warn'); return; }
-  if (connState === 'open')       { toast('Already connected', 'warn'); return; }
+  const raw = document.getElementById('connectInput').value
+    .trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!raw || raw.length < 3)    { toast('Enter a valid device code', 'err'); return; }
+  if (raw === myCode)            { toast('Cannot connect to yourself', 'err'); return; }
+  if (connState === 'connecting'){ toast('Already attempting connection...', 'warn'); return; }
+  if (connState === 'open')      { toast('Already connected', 'warn'); return; }
 
   lastPeerCode = raw;
-  iceRestartAttempts = 0;
-  connPathType = 'direct';
   setConnState('connecting');
-  setConnMsg('Connecting to ' + raw + '... (up to 20s)', 'connecting');
-
+  setConnMsg('Connecting to ' + raw + '...', 'connecting');
   const btn = document.getElementById('connectBtn');
   btn.disabled = true;
   btn.textContent = 'Connecting...';
 
-  // Show ICE diagnostic strip
-  resetIceDots();
-  showIceStrip(true);
-  setIceDot('iceDotHost', 'active');
-
-  // Staggered ICE phase indicators (informational, reflects typical ICE timeline)
-  setTimeout(() => { setIceDot('iceDotHost', 'done'); setIceDot('iceDotSrflx', 'active'); }, 2000);
-  setTimeout(() => { setIceDot('iceDotSrflx', 'done'); setIceDot('iceDotRelay', 'active'); }, 6000);
-
   startHSTimer();
 
-  const c = peer.connect(raw, {
-    reliable: true,
-    serialization: 'binary',
-  });
+  const c = peer.connect(raw, { reliable: true, serialization: 'binary' });
   setupConn(c);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  SETUP CONNECTION HANDLERS
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   SETUP CONNECTION HANDLERS
+   ─────────────────────────────────────────────────────────────────── */
 function setupConn(c) {
   conn = c;
 
@@ -948,26 +1014,13 @@ function setupConn(c) {
     clearHSTimer();
     setConnState('open');
     lastPeerCode = c.peer;
-    iceRestartAttempts = 0;
-    document.getElementById('connPeerLabel').textContent = c.peer;
-
-    setIceDot('iceDotRelay', 'done');
-    setIceDot('iceDotOpen', 'done');
-    setTimeout(() => showIceStrip(false), 2000);
-
+    document.getElementById('connPeer').textContent = c.peer;
     showScreen('screen-transfer');
-    setNavStatus('P2P · ' + c.peer, 'dot-live');
+    setNavStatus((hotspotMode?'LAN · ':'P2P · ') + c.peer,
+                 hotspotMode ? 'dot-purple' : 'dot-live');
     setConnMsg('', '');
     resetConnBtn();
-
-    isPaused = false;
-    pauseResolve = null;
-    updatePauseBtn();
-
     toast('✓ P2P tunnel open · ' + c.peer, 'ok');
-
-    // Detect actual connection path type after a short delay (stats need time)
-    setTimeout(() => detectConnPath(c), 2500);
   });
 
   c.on('data', handleIncoming);
@@ -981,49 +1034,36 @@ function setupConn(c) {
 
   c.on('error', err => {
     clearHSTimer();
-
-    // Attempt ICE restart before giving up (for transient connectivity drops)
-    if (connState === 'open' && iceRestartAttempts < MAX_ICE_RESTARTS) {
-      iceRestartAttempts++;
-      toast('⚡ Connection hiccup — attempting ICE restart (' + iceRestartAttempts + '/' + MAX_ICE_RESTARTS + ')', 'warn');
-      try {
-        // Trigger renegotiation through PeerJS
-        if (conn && conn.open) return;
-      } catch(e) {}
-    }
-
     setConnState('idle');
-    showIceStrip(false);
     toast('Connection error: ' + (err.message || err.type || err), 'err');
     handleDisconnect();
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  DISCONNECT / RECONNECT / REFRESH
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   DISCONNECT / RECONNECT / REFRESH
+   ─────────────────────────────────────────────────────────────────── */
 function handleDisconnect() {
-  if (isPaused && pauseResolve) { pauseResolve(); pauseResolve = null; }
-  isPaused = false;
+  resumeAll(); // unblock any paused sends
   cancelAllTransfers();
   conn = null;
   setConnState('idle');
   showScreen('screen-pair');
-  setNavStatus('ONLINE · ' + myCode, 'dot-live');
+  setNavStatus((hotspotMode?'LAN · ':'ONLINE · ') + myCode,
+               hotspotMode ? 'dot-purple' : 'dot-live');
   resetQueues();
-  showIceStrip(false);
 }
 
 function disconnect(manual) {
-  if (conn) { try { conn.close(); } catch (e) {} }
+  if (conn) { try { conn.close(); } catch(e) {} }
   handleDisconnect();
   if (manual) toast('Disconnected');
 }
 
 function reconnect() {
-  if (!lastPeerCode) { toast('No previous peer to reconnect to', 'warn'); return; }
-  if (connState === 'open') { toast('Already connected', 'warn'); return; }
-  if (connState === 'connecting') { toast('Already connecting...', 'warn'); return; }
+  if (!lastPeerCode)             { toast('No previous peer to reconnect to', 'warn'); return; }
+  if (connState === 'open')      { toast('Already connected', 'warn'); return; }
+  if (connState === 'connecting'){ toast('Already connecting...', 'warn'); return; }
   document.getElementById('connectInput').value = lastPeerCode;
   setConnMsg('Reconnecting to ' + lastPeerCode + '...', 'connecting');
   connectToPeer();
@@ -1041,71 +1081,112 @@ function refreshCode() {
 }
 
 function resetQueues() {
-  document.getElementById('sendList').innerHTML = '<div class="queue-empty" id="sendEmpty">Files you send appear here</div>';
-  document.getElementById('recvList').innerHTML = '<div class="queue-empty" id="recvEmpty">Incoming files appear here</div>';
-  ['sendCount','recvCount'].forEach(id => document.getElementById(id).textContent = '0');
+  document.getElementById('sendList').innerHTML = '<div class="q-empty" id="sendEmpty">Files you send appear here</div>';
+  document.getElementById('recvList').innerHTML = '<div class="q-empty" id="recvEmpty">Incoming files appear here</div>';
+  document.getElementById('sendCount').textContent = '0';
+  document.getElementById('recvCount').textContent  = '0';
   sendCount = recvCount = 0;
   totalBytesSent = totalBytesRecv = 0;
   inFlight.clear();
   updateStats();
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  PAUSE / RESUME — async Promise gate, NO peer connection drop
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   PAUSE / RESUME SYSTEM (REQ 3)
+   Does NOT close the connection. Halts chunk reading in the send loop.
+   ─────────────────────────────────────────────────────────────────── */
 function togglePause() {
-  isPaused = !isPaused;
-  if (!isPaused) {
-    if (pauseResolve) { pauseResolve(); pauseResolve = null; }
-    if (conn && conn.open) { try { conn.send({ type: 'sender_resumed' }); } catch (e) {} }
-    toast('▶️ Transfer resumed', 'ok');
-  } else {
-    if (conn && conn.open) { try { conn.send({ type: 'sender_paused' }); } catch (e) {} }
-    toast('⏸️ Transfer paused', 'warn');
-  }
-  updatePauseBtn();
-}
-
-function updatePauseBtn() {
-  const btn = document.getElementById('pauseBtn');
-  if (!btn) return;
   if (isPaused) {
-    btn.textContent = '▶️ Resume';
-    btn.className = 'btn btn-resume btn-sm';
+    resumeAll();
   } else {
-    btn.textContent = '⏸️ Pause';
-    btn.className = 'btn btn-pause btn-sm';
+    pauseAll();
   }
 }
 
-function waitForResume() {
-  return new Promise(resolve => { pauseResolve = resolve; });
+function pauseAll() {
+  isPaused = true;
+  document.getElementById('pauseBtn').textContent  = '▶ Resume';
+  document.getElementById('pauseBtn').className    = 'btn btn-success btn-sm';
+  const bar  = document.getElementById('connBar');
+  const dot  = document.getElementById('cDot');
+  const peer = document.getElementById('connPeer');
+  bar.classList.add('paused');
+  dot.classList.add('paused-dot');
+  peer.classList.add('paused-peer');
+
+  // Notify receiver
+  if (conn && conn.open) {
+    try { conn.send({ type: 'paused' }); } catch(e) {}
+  }
+  toast('⏸ Transfer paused', 'warn');
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  BACKPRESSURE HELPER
-// ═══════════════════════════════════════════════════════════════════════
-function drainBuffer(dc, threshold) {
+function resumeAll() {
+  isPaused = false;
+  document.getElementById('pauseBtn').textContent = '⏸ Pause';
+  document.getElementById('pauseBtn').className   = 'btn btn-warn btn-sm';
+  const bar  = document.getElementById('connBar');
+  const dot  = document.getElementById('cDot');
+  const peer = document.getElementById('connPeer');
+  bar.classList.remove('paused');
+  dot.classList.remove('paused-dot');
+  peer.classList.remove('paused-peer');
+
+  // Unblock all waiting send loops
+  const resolvers = pauseResolvers.splice(0);
+  resolvers.forEach(r => r());
+
+  // Notify receiver
+  if (conn && conn.open) {
+    try { conn.send({ type: 'resumed' }); } catch(e) {}
+  }
+  if (resolvers.length > 0) toast('▶ Transfer resumed', 'ok');
+}
+
+// Returns a Promise that resolves when isPaused becomes false
+function waitForResume() {
+  if (!isPaused) return Promise.resolve();
+  return new Promise(resolve => pauseResolvers.push(resolve));
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   BACKPRESSURE DRAIN (REQ: only blocks when buffer is actually full)
+   LAN FIX: no polling unless bufferedAmount > BUF_HIGH
+   ─────────────────────────────────────────────────────────────────── */
+function drainBuffer(dc) {
+  // Fast path: buffer already drained
+  if (!dc || dc.bufferedAmount <= BUF_LOW) return Promise.resolve();
+
   return new Promise(resolve => {
-    if (!dc || dc.bufferedAmount <= threshold) { resolve(); return; }
-    const useEvent = 'bufferedAmountLowThreshold' in dc;
-    if (useEvent) {
-      dc.bufferedAmountLowThreshold = threshold;
-      const onLow = () => { dc.removeEventListener('bufferedamountlow', onLow); resolve(); };
+    // Use native bufferedamountlow event if available (Chrome, Firefox, Safari 15+)
+    if ('bufferedAmountLowThreshold' in dc) {
+      dc.bufferedAmountLowThreshold = BUF_LOW;
+      const onLow = () => {
+        dc.removeEventListener('bufferedamountlow', onLow);
+        resolve();
+      };
       dc.addEventListener('bufferedamountlow', onLow);
     } else {
-      const poll = () => {
-        if (!dc || dc.bufferedAmount <= threshold) resolve();
-        else setTimeout(poll, IS_MOBILE ? 30 : 15);
+      // Fallback: tight poll — 10ms on desktop, 20ms on mobile
+      const interval = IS_MOBILE ? 20 : 10;
+      const check = () => {
+        if (!dc || dc.bufferedAmount <= BUF_LOW) resolve();
+        else setTimeout(check, interval);
       };
-      setTimeout(poll, IS_MOBILE ? 30 : 15);
+      setTimeout(check, interval);
     }
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  SEND FILES
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   SEND FILE — LAN-OPTIMISED STREAMING WITH BACKPRESSURE
+   
+   KEY LAN FIXES vs previous version:
+   1. NO await/setTimeout between chunks unless buffer is actually full.
+   2. Reads slices back-to-back as fast as CPU allows.
+   3. drainBuffer() only invoked when bufferedAmount > BUF_HIGH.
+   4. Pause check uses a lightweight flag + Promise, not a timer.
+   ─────────────────────────────────────────────────────────────────── */
 function sendFiles(fileList) {
   if (!conn || !conn.open) { toast('Not connected', 'err'); return; }
   [...fileList].forEach(f => sendFile(f));
@@ -1114,104 +1195,126 @@ function sendFiles(fileList) {
 async function sendFile(file) {
   if (!conn || !conn.open) return;
 
-  const id = Math.random().toString(36).substr(2, 9);
+  const id          = Math.random().toString(36).substr(2, 9);
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
-  const job = { cancelled: false };
+  const job         = { cancelled: false };
   activeJobs.set(id, job);
 
-  conn.send({ type: 'meta', id, name: file.name, size: file.size,
-              mime: file.type || 'application/octet-stream', totalChunks });
+  // Send metadata frame
+  conn.send({ type:'meta', id, name:file.name, size:file.size,
+              mime:file.type || 'application/octet-stream', totalChunks });
 
-  const els = addSendItem(id, file.name, file.size);
+  const els       = addSendItem(id, file.name, file.size);
   const startTime = performance.now();
-  let bytesSent = 0;
+  let   bytesSent = 0;
+
+  // Direct reference to the underlying RTCDataChannel
   const dc = conn.dataChannel;
 
   for (let i = 0; i < totalChunks; i++) {
-    if (job.cancelled) break;
 
-    // Pause gate — suspends loop without closing DataChannel
-    if (isPaused) { await waitForResume(); }
-
-    if (job.cancelled) break;
-
-    if (dc && dc.bufferedAmount > BUF_HIGH) {
-      await drainBuffer(dc, BUF_LOW);
+    // ── 1. PAUSE CHECK (non-blocking when not paused) ──────────────
+    if (isPaused) {
+      markSendPaused(id, els);
+      await waitForResume();
+      markSendSending(id, els);
     }
 
+    // ── 2. CANCEL CHECK ────────────────────────────────────────────
     if (job.cancelled) break;
 
+    // ── 3. BACKPRESSURE: only block if buffer is OVER the high mark ─
+    //    LAN FIX: on a fast LAN the buffer never exceeds BUF_HIGH, so
+    //    this await is essentially never hit → zero artificial delay.
+    if (dc && dc.bufferedAmount > BUF_HIGH) {
+      await drainBuffer(dc);
+    }
+
+    // Re-check after any awaits
+    if (job.cancelled) break;
+    if (isPaused)      { markSendPaused(id, els); await waitForResume(); markSendSending(id, els); }
+    if (job.cancelled) break;
+
+    // ── 4. READ EXACTLY ONE SLICE FROM DISK (no full ArrayBuffer) ──
     const slice = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
     let chunkAB;
     try {
       chunkAB = await slice.arrayBuffer();
-    } catch (e) {
-      toast('Read error: ' + (e.message || e), 'err');
+    } catch(e) {
+      toast(`Read error on ${file.name}: ${e.message || e}`, 'err');
       job.cancelled = true;
       break;
     }
 
     if (job.cancelled) break;
 
-    if (dc && dc.bufferedAmount > BUF_HIGH) {
-      await drainBuffer(dc, BUF_LOW);
-    }
-
-    if (job.cancelled) break;
-
+    // ── 5. SEND (hot path — no delay) ─────────────────────────────
     try {
-      conn.send({ type: 'chunk', id, index: i, data: new Uint8Array(chunkAB) });
-    } catch (e) {
+      conn.send({ type:'chunk', id, index:i, data: new Uint8Array(chunkAB) });
+    } catch(e) {
       toast('Send error — connection may have dropped', 'err');
       break;
     }
 
-    bytesSent += chunkAB.byteLength;
+    bytesSent      += chunkAB.byteLength;
     totalBytesSent += chunkAB.byteLength;
 
-    if (i % UI_UPDATE_EVERY === 0 || i === totalChunks - 1) {
-      const pct = (i + 1) / totalChunks;
+    // ── 6. UI UPDATE (throttled to avoid DOM thrash) ───────────────
+    // Desktop: every 8 chunks. Mobile: every 2 chunks.
+    const UI_EVERY = IS_MOBILE ? 2 : 8;
+    if (i % UI_EVERY === 0 || i === totalChunks - 1) {
       const elapsed = (performance.now() - startTime) / 1000 || 0.001;
-      const bps = bytesSent / elapsed;
-      const remainingBytes = file.size - bytesSent;
+      const bps     = bytesSent / elapsed;
+      // REQ: 2 decimal places on percentage
+      const pctStr  = ((i + 1) / totalChunks * 100).toFixed(2) + '%';
+      const remaining = file.size - bytesSent;
+      const etaStr  = fmtETA(remaining, bps);
 
-      if (els.fill)  els.fill.style.width  = (pct * 100).toFixed(2) + '%';
-      if (els.pct)   els.pct.textContent   = (pct * 100).toFixed(2) + '%';
-      if (els.speed) els.speed.textContent = fmtSpeed(bps);
-      if (els.eta)   els.eta.textContent   = fmtETA(bps > 0 ? remainingBytes / bps : Infinity);
+      if (els.fill)  els.fill.style.width  = pctStr;
+      if (els.pct)   els.pct.textContent   = pctStr;
+      if (els.spd)   els.spd.textContent   = fmtSpeed(bps);
+      if (els.eta)   els.eta.textContent   = remaining > 0 ? 'ETA ' + etaStr : '';
       updateStats();
     }
-
-    if (i % 20 === 19) await new Promise(r => setTimeout(r, 0));
+    // No setTimeout/yield in the hot path on LAN. The slice.arrayBuffer()
+    // await inherently yields to the event loop, keeping the tab responsive.
   }
 
   activeJobs.delete(id);
 
   if (job.cancelled) {
-    if (conn && conn.open) { try { conn.send({ type: 'cancel', id }); } catch (e) {} }
+    if (conn && conn.open) {
+      try { conn.send({ type:'cancel', id }); } catch(e) {}
+    }
     markSendCancelled(id, els);
     return;
   }
 
-  try { conn.send({ type: 'done', id }); } catch (e) {}
+  // Final done frame
+  try { conn.send({ type:'done', id }); } catch(e) {}
 
+  // REQ: Dynamic success alert with exact filename
   if (els.fill)  { els.fill.style.background = 'linear-gradient(90deg,var(--success),#34d399)'; els.fill.style.width = '100%'; }
   if (els.pct)   els.pct.textContent   = '100.00%';
-  if (els.speed) els.speed.textContent = '';
+  if (els.spd)   els.spd.textContent   = '';
   if (els.eta)   els.eta.textContent   = '';
-  if (els.badge) { els.badge.textContent = '✓ Sent'; els.badge.className = 'file-badge done'; }
-  if (els.item)  { els.item.classList.add('done'); const cb = els.item.querySelector('.item-cancel'); if (cb) cb.remove(); }
+  if (els.badge) { els.badge.textContent = '✅ Sent'; els.badge.className = 'f-badge done'; }
+  if (els.item)  {
+    els.item.classList.remove('paused-item');
+    els.item.classList.add('done');
+    const cb = els.item.querySelector('.i-cancel');
+    if (cb) cb.remove();
+  }
 
   sendCount++;
   document.getElementById('sendCount').textContent = sendCount;
-  toast('Upload Complete: ' + file.name + ' ✅', 'ok', 4500);
+  // REQ: Dynamic success toast with filename
+  toast(`Upload Complete: ${file.name} ✅`, 'ok', 4500);
 }
 
-function markSendCancelled(id, els) {
-  if (els.badge) { els.badge.textContent = 'Cancelled'; els.badge.className = 'file-badge cancelled'; }
-  if (els.item)  { els.item.classList.add('cancelled'); const cb = els.item.querySelector('.item-cancel'); if (cb) cb.remove(); }
-}
-
+/* ─────────────────────────────────────────────────────────────────────
+   SEND ITEM UI HELPERS
+   ─────────────────────────────────────────────────────────────────── */
 function addSendItem(id, name, size) {
   const empty = document.getElementById('sendEmpty');
   if (empty) empty.remove();
@@ -1221,98 +1324,90 @@ function addSendItem(id, name, size) {
   item.id = 'si-' + id;
   item.innerHTML = `
     <div class="file-top">
-      <div class="file-ext-badge">${getExt(name)}</div>
-      <div class="file-name-wrap">
-        <div class="file-name">${escHtml(name)}</div>
-        <div class="file-meta">${fmtSize(size)}</div>
+      <div class="ext-badge">${getExt(name)}</div>
+      <div class="fn-wrap">
+        <div class="fn">${escHtml(name)}</div>
+        <div class="fm">${fmtSize(size)}</div>
       </div>
-      <span class="file-badge sending" id="sb-${id}">Sending</span>
-      <button class="item-cancel" onclick="cancelTransfer('${id}')" title="Cancel">✕</button>
+      <span class="f-badge sending" id="sb-${id}">Sending</span>
+      <button class="i-cancel" onclick="cancelTransfer('${id}')" title="Cancel">✕</button>
     </div>
     <div class="prog-row">
       <div class="prog-track"><div class="prog-fill" id="sf-${id}" style="width:0%"></div></div>
       <div class="prog-pct" id="sp-${id}">0.00%</div>
-      <div class="speed-tag" id="ss-${id}"></div>
+      <div class="spd-tag" id="ss-${id}"></div>
     </div>
-    <div class="eta-row" id="se-${id}"></div>`;
+    <div class="eta-row">
+      <span class="eta-label">ETA</span>
+      <span class="eta-val" id="se-${id}">--</span>
+    </div>`;
   document.getElementById('sendList').appendChild(item);
+  return getItemEls('s', id);
+}
 
+function getItemEls(prefix, id) {
   return {
-    item,
-    fill:  document.getElementById('sf-'+id),
-    pct:   document.getElementById('sp-'+id),
-    speed: document.getElementById('ss-'+id),
-    badge: document.getElementById('sb-'+id),
-    eta:   document.getElementById('se-'+id),
+    item:  document.getElementById((prefix==='s'?'si':'ri') + '-' + id),
+    fill:  document.getElementById((prefix==='s'?'sf':'rf') + '-' + id),
+    pct:   document.getElementById((prefix==='s'?'sp':'rp') + '-' + id),
+    spd:   document.getElementById((prefix==='s'?'ss':'rs') + '-' + id),
+    eta:   document.getElementById((prefix==='s'?'se':'re') + '-' + id),
+    badge: document.getElementById((prefix==='s'?'sb':'rb') + '-' + id),
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  CANCEL TRANSFERS
-// ═══════════════════════════════════════════════════════════════════════
+function markSendPaused(id, els) {
+  if (els.badge) { els.badge.textContent = '⏸ Paused'; els.badge.className = 'f-badge paused-b'; }
+  if (els.item)  els.item.classList.add('paused-item');
+}
+function markSendSending(id, els) {
+  if (els.badge) { els.badge.textContent = 'Sending'; els.badge.className = 'f-badge sending'; }
+  if (els.item)  els.item.classList.remove('paused-item');
+}
+function markSendCancelled(id, els) {
+  if (els.badge) { els.badge.textContent = 'Cancelled'; els.badge.className = 'f-badge cancelled'; }
+  if (els.item)  { els.item.classList.add('cancelled'); els.item.classList.remove('paused-item'); const cb = els.item?.querySelector('.i-cancel'); if (cb) cb.remove(); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   CANCEL TRANSFER
+   ─────────────────────────────────────────────────────────────────── */
 function cancelTransfer(id) {
   const job = activeJobs.get(id);
   if (job) { job.cancelled = true; activeJobs.delete(id); }
-  const badge = document.getElementById('sb-'+id);
-  const item  = document.getElementById('si-'+id);
-  if (badge) { badge.textContent = 'Cancelled'; badge.className = 'file-badge cancelled'; }
-  if (item)  { item.classList.add('cancelled'); const cb = item.querySelector('.item-cancel'); if (cb) cb.remove(); }
-  if (conn && conn.open) { try { conn.send({ type: 'cancel', id }); } catch (e) {} }
+  markSendCancelled(id, getItemEls('s', id));
+  if (conn && conn.open) { try { conn.send({ type:'cancel', id }); } catch(e) {} }
   toast('Transfer cancelled', 'warn');
 }
 
 function cancelAllTransfers() {
-  let count = 0;
+  let n = 0;
   activeJobs.forEach((job, id) => {
     job.cancelled = true;
-    if (conn && conn.open) { try { conn.send({ type: 'cancel', id }); } catch (e) {} }
-    const badge = document.getElementById('sb-'+id);
-    const item  = document.getElementById('si-'+id);
-    if (badge) { badge.textContent = 'Cancelled'; badge.className = 'file-badge cancelled'; }
-    if (item)  { item.classList.add('cancelled'); const cb = item.querySelector('.item-cancel'); if (cb) cb.remove(); }
-    count++;
+    if (conn && conn.open) { try { conn.send({ type:'cancel', id }); } catch(e) {} }
+    markSendCancelled(id, getItemEls('s', id));
+    n++;
   });
   activeJobs.clear();
   inFlight.clear();
-  if (count > 0) toast(count + ' transfer(s) cancelled', 'warn');
+  if (n > 0) toast(n + ' transfer(s) cancelled', 'warn');
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  RECEIVE
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   RECEIVE DATA HANDLER
+   ─────────────────────────────────────────────────────────────────── */
 function handleIncoming(data) {
   if (!data || !data.type) return;
 
   switch (data.type) {
-    case 'sender_paused': {
-      inFlight.forEach((f, fid) => {
-        const badge = document.getElementById('rb-'+fid);
-        const eta   = document.getElementById('re-'+fid);
-        if (badge) { badge.textContent = '⏸ PAUSED BY SENDER'; badge.className = 'file-badge paused'; }
-        if (eta)   eta.textContent = '⏸ Transfer paused by sender...';
-      });
-      toast('⏸️ Sender paused the transfer', 'warn');
-      break;
-    }
-
-    case 'sender_resumed': {
-      inFlight.forEach((f, fid) => {
-        const badge = document.getElementById('rb-'+fid);
-        const eta   = document.getElementById('re-'+fid);
-        if (badge) { badge.textContent = 'Receiving'; badge.className = 'file-badge recv'; }
-        if (eta)   eta.textContent = '';
-      });
-      toast('▶️ Transfer resumed by sender', 'ok');
-      break;
-    }
 
     case 'meta': {
       inFlight.set(data.id, {
         name: data.name, size: data.size, mime: data.mime,
         totalChunks: data.totalChunks,
-        chunks: new Array(data.totalChunks),
-        received: 0, bytesRecv: 0,
-        startTime: performance.now(),
+        chunks:      new Array(data.totalChunks),
+        received:    0, bytesRecv: 0,
+        startTime:   performance.now(),
       });
       addRecvItem(data.id, data.name, data.size);
       break;
@@ -1326,21 +1421,23 @@ function handleIncoming(data) {
       f.bytesRecv += data.data.byteLength;
       totalBytesRecv += data.data.byteLength;
 
-      if (f.received % UI_UPDATE_EVERY === 0 || f.received === f.totalChunks) {
-        const pct = f.received / f.totalChunks;
-        const elapsed = (performance.now() - f.startTime) / 1000 || 0.001;
-        const bps = f.bytesRecv / elapsed;
-        const remainingBytes = f.size - f.bytesRecv;
+      const UI_EVERY = IS_MOBILE ? 2 : 8;
+      if (f.received % UI_EVERY === 0 || f.received === f.totalChunks) {
+        // REQ: 2 decimal places
+        const pctStr   = (f.received / f.totalChunks * 100).toFixed(2) + '%';
+        const elapsed  = (performance.now() - f.startTime) / 1000 || 0.001;
+        const bps      = f.bytesRecv / elapsed;
+        const remaining = f.size - f.bytesRecv;
+        const etaStr   = fmtETA(remaining, bps);
 
-        const fill  = document.getElementById('rf-'+data.id);
-        const pctEl = document.getElementById('rp-'+data.id);
-        const spd   = document.getElementById('rs-'+data.id);
-        const etaEl = document.getElementById('re-'+data.id);
-
-        if (fill)  fill.style.width  = (pct * 100).toFixed(2) + '%';
-        if (pctEl) pctEl.textContent = (pct * 100).toFixed(2) + '%';
-        if (spd)   spd.textContent   = fmtSpeed(bps);
-        if (etaEl) etaEl.textContent = fmtETA(bps > 0 ? remainingBytes / bps : Infinity);
+        const fill = document.getElementById('rf-'+data.id);
+        const pct  = document.getElementById('rp-'+data.id);
+        const spd  = document.getElementById('rs-'+data.id);
+        const eta  = document.getElementById('re-'+data.id);
+        if (fill) fill.style.width  = pctStr;
+        if (pct)  pct.textContent   = pctStr;
+        if (spd)  spd.textContent   = fmtSpeed(bps);
+        if (eta)  eta.textContent   = remaining > 0 ? 'ETA ' + etaStr : '';
         updateStats();
       }
       break;
@@ -1355,22 +1452,23 @@ function handleIncoming(data) {
       downloadBlob(blob, f.name);
 
       const fill  = document.getElementById('rf-'+data.id);
-      const pctEl = document.getElementById('rp-'+data.id);
+      const pct   = document.getElementById('rp-'+data.id);
       const spd   = document.getElementById('rs-'+data.id);
+      const eta   = document.getElementById('re-'+data.id);
       const badge = document.getElementById('rb-'+data.id);
       const item  = document.getElementById('ri-'+data.id);
-      const etaEl = document.getElementById('re-'+data.id);
 
       if (fill)  { fill.style.width='100%'; fill.style.background='linear-gradient(90deg,var(--success),#34d399)'; }
-      if (pctEl) pctEl.textContent = '100.00%';
-      if (spd)   spd.textContent   = '';
-      if (etaEl) etaEl.textContent = '';
-      if (badge) { badge.textContent = '✓ Saved'; badge.className = 'file-badge done'; }
-      if (item)  item.classList.add('done');
+      if (pct)   pct.textContent  = '100.00%';
+      if (spd)   spd.textContent  = '';
+      if (eta)   eta.textContent  = '';
+      if (badge) { badge.textContent = '✅ Saved'; badge.className = 'f-badge done'; }
+      if (item)  { item.classList.remove('paused-item'); item.classList.add('done'); }
 
       recvCount++;
       document.getElementById('recvCount').textContent = recvCount;
-      toast('Download Complete: ' + f.name + ' ✅', 'ok', 4500);
+      // REQ: Dynamic success toast with filename
+      toast(`Download Complete: ${f.name} ✅`, 'ok', 4500);
       break;
     }
 
@@ -1378,11 +1476,34 @@ function handleIncoming(data) {
       inFlight.delete(data.id);
       const badge = document.getElementById('rb-'+data.id);
       const item  = document.getElementById('ri-'+data.id);
-      const etaEl = document.getElementById('re-'+data.id);
-      if (badge) { badge.textContent = 'Cancelled'; badge.className = 'file-badge cancelled'; }
-      if (item)  item.classList.add('cancelled');
-      if (etaEl) etaEl.textContent = '';
+      if (badge) { badge.textContent = 'Cancelled'; badge.className = 'f-badge cancelled'; }
+      if (item)  { item.classList.add('cancelled'); item.classList.remove('paused-item'); }
       toast('Transfer cancelled by sender', 'warn');
+      break;
+    }
+
+    case 'paused': {
+      // Sender paused — update all receiving items
+      document.querySelectorAll('#recvList .f-badge.recv-badge').forEach(b => {
+        b.textContent = '⏸ Paused by sender';
+        b.className   = 'f-badge paused-b';
+      });
+      document.querySelectorAll('#recvList .file-item:not(.done):not(.cancelled)').forEach(el => {
+        el.classList.add('paused-item');
+      });
+      toast('⏸ Sender paused the transfer', 'warn');
+      break;
+    }
+
+    case 'resumed': {
+      document.querySelectorAll('#recvList .f-badge.paused-b').forEach(b => {
+        b.textContent = 'Receiving';
+        b.className   = 'f-badge recv-badge';
+      });
+      document.querySelectorAll('#recvList .file-item').forEach(el => {
+        el.classList.remove('paused-item');
+      });
+      toast('▶ Sender resumed', 'ok');
       break;
     }
   }
@@ -1397,25 +1518,31 @@ function addRecvItem(id, name, size) {
   item.id = 'ri-' + id;
   item.innerHTML = `
     <div class="file-top">
-      <div class="file-ext-badge recv">${getExt(name)}</div>
-      <div class="file-name-wrap">
-        <div class="file-name">${escHtml(name)}</div>
-        <div class="file-meta">${fmtSize(size)}</div>
+      <div class="ext-badge recv">${getExt(name)}</div>
+      <div class="fn-wrap">
+        <div class="fn">${escHtml(name)}</div>
+        <div class="fm">${fmtSize(size)}</div>
       </div>
-      <span class="file-badge recv" id="rb-${id}">Receiving</span>
+      <span class="f-badge recv-badge" id="rb-${id}">Receiving</span>
     </div>
     <div class="prog-row">
       <div class="prog-track"><div class="prog-fill recv" id="rf-${id}" style="width:0%"></div></div>
       <div class="prog-pct" id="rp-${id}">0.00%</div>
-      <div class="speed-tag" id="rs-${id}"></div>
+      <div class="spd-tag" id="rs-${id}"></div>
     </div>
-    <div class="eta-row recv" id="re-${id}"></div>`;
+    <div class="eta-row">
+      <span class="eta-label">ETA</span>
+      <span class="eta-val" id="re-${id}">--</span>
+    </div>`;
   document.getElementById('recvList').appendChild(item);
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   DOWNLOAD & STATS
+   ─────────────────────────────────────────────────────────────────── */
 function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a   = document.createElement('a');
   a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 180_000);
 }
@@ -1426,16 +1553,19 @@ function updateStats() {
   document.getElementById('statBytes').textContent = fmtSize(totalBytesSent + totalBytesRecv);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  DROP ZONE
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   DROP ZONE EVENTS
+   ─────────────────────────────────────────────────────────────────── */
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 
 dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
 dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('over'); });
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('over'); sendFiles(e.dataTransfer.files); });
-fileInput.addEventListener('change',  () => { sendFiles(fileInput.files); fileInput.value = ''; });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  sendFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => { sendFiles(fileInput.files); fileInput.value = ''; });
 
 document.addEventListener('paste', e => {
   if (!conn || !conn.open) return;
@@ -1444,9 +1574,9 @@ document.addEventListener('paste', e => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════
-//  HELPERS
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   COPY HELPERS
+   ─────────────────────────────────────────────────────────────────── */
 function copyMyCode() {
   navigator.clipboard.writeText(myCode)
     .then(() => toast('Code copied!', 'ok'))
@@ -1461,20 +1591,23 @@ function copyLink() {
 function fbCopy(t) {
   const ta = document.createElement('textarea');
   ta.value = t; document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); } catch (e) {}
+  try { document.execCommand('copy'); } catch(e) {}
   document.body.removeChild(ta);
 }
 
-document.getElementById('connectInput').addEventListener('keydown', e => { if (e.key === 'Enter') connectToPeer(); });
-document.getElementById('connectInput').addEventListener('input',   e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); });
-
-document.getElementById('qrScanModal').addEventListener('click', e => {
-  if (e.target === document.getElementById('qrScanModal')) closeQRScanner();
+/* ─────────────────────────────────────────────────────────────────────
+   INPUT HELPERS
+   ─────────────────────────────────────────────────────────────────── */
+document.getElementById('connectInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') connectToPeer();
+});
+document.getElementById('connectInput').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 });
 
-// ═══════════════════════════════════════════════════════════════════════
-//  BOOT
-// ═══════════════════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────────────────
+   BOOT
+   ─────────────────────────────────────────────────────────────────── */
 initPeer(genCode());
 </script>
 </body>
