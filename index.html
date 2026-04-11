@@ -615,8 +615,8 @@ const CHUNK_SIZE     = IS_MOBILE ? 64  * 1024 : 256 * 1024;
 const BUF_HIGH       = IS_MOBILE ?  4 * 1024 * 1024 : 16 * 1024 * 1024;  // 4 MB / 16 MB
 const BUF_LOW        = IS_MOBILE ?  512 * 1024       :  4 * 1024 * 1024;  // 512 KB / 4 MB
 
-// REQ 2: Strict handshake deadline
-const HANDSHAKE_MS   = 7000;
+// Handshake deadline — 20s gives mobile ICE negotiation enough runway
+const HANDSHAKE_MS   = 20000;
 
 // Peer ID character set (no ambiguous chars)
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -868,16 +868,23 @@ function onHotspotToggle() {
    ─────────────────────────────────────────────────────────────────── */
 function buildPeerConfig() {
   if (hotspotMode) {
-    // REQ: Hotspot mode — host candidates ONLY, no internet servers
+    // HOTSPOT FIX: Do NOT use iceTransportPolicy:'host' — it triggers mDNS
+    // candidate privacy masking on Android Chrome & iOS Safari, causing ICE
+    // gathering to stall because .local hostnames cannot resolve across devices.
+    //
+    // Correct: iceTransportPolicy:'all' + iceServers:[]
+    // With zero STUN/TURN servers, WebRTC can only gather host (LAN) candidates
+    // anyway — same effect, but works on every browser universally.
     return {
       iceServers: [],
-      iceTransportPolicy: 'host',
+      iceTransportPolicy: 'all',
+      iceCandidatePoolSize: 2,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
     };
   }
   return {
     iceServers: ICE_SERVERS_FULL,
-    // LAN FIX: 'all' lets WebRTC prioritise host (LAN) candidates first.
-    // NEVER use 'relay' — that forces all traffic through TURN servers.
     iceTransportPolicy: 'all',
     iceCandidatePoolSize: IS_MOBILE ? 4 : 10,
     bundlePolicy: 'max-bundle',
@@ -957,17 +964,47 @@ function initPeer(code) {
    ─────────────────────────────────────────────────────────────────── */
 function setConnState(s) { connState = s; }
 
+let _countdownInterval = null;
+
 function startHSTimer() {
   clearHSTimer();
+
+  // Live countdown in the status message so UI never looks frozen
+  let remaining = Math.round(HANDSHAKE_MS / 1000);
+  _updateCountdownMsg(remaining);
+  _countdownInterval = setInterval(() => {
+    remaining--;
+    if (remaining > 0 && connState === 'connecting') {
+      _updateCountdownMsg(remaining);
+    } else {
+      clearInterval(_countdownInterval);
+      _countdownInterval = null;
+    }
+  }, 1000);
+
   handshakeTimer = setTimeout(() => {
+    clearInterval(_countdownInterval);
+    _countdownInterval = null;
     if (connState !== 'open') {
       setConnState('idle');
       if (conn) { try { conn.close(); } catch(e) {} conn = null; }
-      setConnMsg(`⏱ Handshake timed out (${HANDSHAKE_MS/1000}s). Check firewall or enable Hotspot Mode.`, 'error');
+      const hsMsg = hotspotMode
+        ? `⏱ Timed out (${HANDSHAKE_MS/1000}s). Ensure both devices are on the same hotspot and code is correct.`
+        : `⏱ Timed out (${HANDSHAKE_MS/1000}s). Devices on same Wi-Fi? Try enabling Hotspot Mode.`;
+      const hsToast = hotspotMode
+        ? 'Hotspot timeout — verify both devices share the same hotspot network.'
+        : 'Connection timed out. On same Wi-Fi? Try Hotspot Mode for direct LAN routing.';
+      setConnMsg(hsMsg, 'error');
       resetConnBtn();
-      toast('Connection timed out. Try Hotspot Mode for LAN transfers.', 'err', 7000);
+      toast(hsToast, 'err', 8000);
     }
   }, HANDSHAKE_MS);
+}
+
+function _updateCountdownMsg(secs) {
+  const who  = document.getElementById('connectInput')?.value?.trim() || lastPeerCode || '...';
+  const mode = hotspotMode ? ' [Hotspot]' : '';
+  setConnMsg(`Connecting to ${who}${mode} — ${secs}s`, 'connecting');
 }
 
 function clearHSTimer() {
@@ -993,12 +1030,11 @@ function connectToPeer() {
 
   lastPeerCode = raw;
   setConnState('connecting');
-  setConnMsg('Connecting to ' + raw + '...', 'connecting');
   const btn = document.getElementById('connectBtn');
   btn.disabled = true;
   btn.textContent = 'Connecting...';
 
-  startHSTimer();
+  startHSTimer(); // also drives the live countdown in connMsg
 
   const c = peer.connect(raw, { reliable: true, serialization: 'binary' });
   setupConn(c);
@@ -1012,6 +1048,7 @@ function setupConn(c) {
 
   c.on('open', () => {
     clearHSTimer();
+    if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
     setConnState('open');
     lastPeerCode = c.peer;
     document.getElementById('connPeer').textContent = c.peer;
@@ -1027,6 +1064,7 @@ function setupConn(c) {
 
   c.on('close', () => {
     clearHSTimer();
+    if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
     setConnState('disconnected');
     toast('Connection closed by remote', 'warn');
     handleDisconnect();
@@ -1034,6 +1072,7 @@ function setupConn(c) {
 
   c.on('error', err => {
     clearHSTimer();
+    if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
     setConnState('idle');
     toast('Connection error: ' + (err.message || err.type || err), 'err');
     handleDisconnect();
